@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: selfmark
+  config:
+    import: optional:classpath:application-local.yml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
