@@ -1,0 +1,56 @@
+openapi: 3.1.0
+info:
+  title: SelfMark API
+  version: 0.0.1
+  description: SelfMark 后端接口契约。每个接口完成后导入 Apifox 并按路径和 HTTP 方法匹配更新。
+servers:
+  - url: http://localhost:8080
+paths:
+  /actuator/health:
+    get:
+      summary: Actuator 健康检查
+      operationId: actuatorHealth
+      tags: [基础设施]
+      responses:
+        '200':
+          description: 服务可用
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: UP
+  /api/health:
+    get:
+      summary: API 健康检查
+      operationId: apiHealth
+      tags: [基础设施]
+      responses:
+        '200':
+          description: 服务可用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseHealth'
+components:
+  schemas:
+    ApiResponseHealth:
+      type: object
+      required: [code, msg, data]
+      properties:
+        code:
+          type: integer
+          example: 200
+        msg:
+          type: string
+          example: success
+        data:
+          type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              example: UP

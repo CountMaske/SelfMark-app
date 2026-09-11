@@ -3,6 +3,9 @@
 /.agents/
 /openspec/
 /skills-lock.json
+api/.codex/
+/后端项目文档/skill/本地验收记录/
+/后端项目文档/团队开发总要求.md
 
 # Maven build output
 **/target/
