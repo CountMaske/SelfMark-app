@@ -4,6 +4,21 @@ spring:
   config:
     import: optional:classpath:application-local.yml
 
+server:
+  port: 8080
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+selfmark:
+  jwt:
+    secret: ${SELFMARK_JWT_SECRET:}
+    ttl: 7d
+
 management:
   endpoints:
     web:
