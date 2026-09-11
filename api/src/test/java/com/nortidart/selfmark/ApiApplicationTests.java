@@ -1,10 +1,19 @@
 package com.nortidart.selfmark;
 
+import com.nortidart.selfmark.auth.mapper.UserMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "spring.autoconfigure.exclude=com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration"
+})
 class ApiApplicationTests {
+
+    @MockitoBean
+    UserMapper userMapper;
 
     @Test
     void contextLoads() {

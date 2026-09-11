@@ -5,13 +5,15 @@ import com.auth0.jwt.algorithms.Algorithm;
 import com.nortidart.selfmark.common.context.UserContext;
 import com.nortidart.selfmark.common.exception.BusinessException;
 import com.nortidart.selfmark.common.response.ApiResponse;
-import com.nortidart.selfmark.util.JwtUtil;
+import com.nortidart.selfmark.auth.security.JwtUtil;
+import com.nortidart.selfmark.auth.mapper.UserMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,11 +33,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Import(InfrastructureTests.TestEndpoints.class)
 @TestPropertySource(properties = {
+        "spring.autoconfigure.exclude=com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration",
         "management.health.defaults.enabled=false",
         "management.health.db.enabled=false",
         "management.health.redis.enabled=false"
 })
 class InfrastructureTests {
+
+    @MockitoBean
+    UserMapper userMapper;
 
     @Autowired
     private org.springframework.test.web.servlet.MockMvc mockMvc;

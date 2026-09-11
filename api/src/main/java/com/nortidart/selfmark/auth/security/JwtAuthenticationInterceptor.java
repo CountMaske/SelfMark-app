@@ -1,4 +1,4 @@
-package com.nortidart.selfmark.config;
+package com.nortidart.selfmark.auth.security;
 
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nortidart.selfmark.common.context.CurrentUser;
 import com.nortidart.selfmark.common.context.UserContext;
 import com.nortidart.selfmark.common.response.ApiResponse;
-import com.nortidart.selfmark.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -38,6 +37,9 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
             String token = authorization.substring("Bearer ".length()).trim();
             DecodedJWT jwt = jwtUtil.parse(token);
             Long userId = jwt.getClaim("userId").asLong();
+            if (userId == null && jwt.getSubject() != null) {
+                userId = Long.valueOf(jwt.getSubject());
+            }
             if (userId == null) {
                 writeUnauthorized(response, "token 无效");
                 return false;

@@ -1,10 +1,12 @@
 package com.nortidart.selfmark;
 
+import com.nortidart.selfmark.auth.mapper.UserMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
@@ -15,11 +17,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @org.springframework.test.context.TestPropertySource(properties = {
+        "spring.autoconfigure.exclude=com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration",
         "management.health.defaults.enabled=false",
         "management.health.db.enabled=false",
         "management.health.redis.enabled=false"
 })
 class HealthEndpointTests {
+
+    @MockitoBean
+    UserMapper userMapper;
 
     @Autowired
     private MockMvc mockMvc;

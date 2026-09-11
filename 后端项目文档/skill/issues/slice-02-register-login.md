@@ -28,17 +28,17 @@ user
 
 ## 验收标准
 
-- [ ] `POST /api/auth/register` 带合法 username+password 成功，返回 `{code:0, data:{token, user:{id, username, nickname}}}`
-- [ ] 注册时 username 重复返回 `{code:409, msg:"用户名已存在"}`
-- [ ] 注册时 username 或 password 缺失返回 400
-- [ ] DB 中 password 字段是 bcrypt 哈希（明文不可见、不可还原）
-- [ ] 返回的 user DTO 不含 password 字段
-- [ ] `POST /api/auth/login` 带正确 username+password 成功，返回 token + user
-- [ ] 登录时 username 不存在返回 401
-- [ ] 登录时密码错误返回 401
-- [ ] 注册拿到的 token 能用于访问 `/api/**` 受保护接口（拦截器解析出 userId）
-- [ ] 登录拿到的 token 能用于访问 `/api/**` 受保护接口
-- [ ] token 过期后访问受保护接口返回 401
+- [x] `POST /api/auth/register` 带合法 username+password 成功，返回 `{code:200, data:{token, user:{id, username, nickname}}}`
+- [x] 注册时 username 重复返回 `{code:409, msg:"用户名已存在"}`
+- [x] 注册时 username 或 password 缺失返回 400
+- [x] DB 中 password 字段是 bcrypt 哈希（明文不可见、不可还原）
+- [x] 返回的 user DTO 不含 password 字段
+- [x] `POST /api/auth/login` 带正确 username+password 成功，返回 token + user
+- [x] 登录时 username 不存在返回 401
+- [x] 登录时密码错误返回 401
+- [x] 注册拿到的 token 能用于访问 `/api/**` 受保护接口（拦截器解析出 userId）
+- [x] 登录拿到的 token 能用于访问 `/api/**` 受保护接口
+- [x] token 过期后访问受保护接口返回 401
 
 ## 前置依赖
 
