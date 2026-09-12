@@ -27,7 +27,7 @@
 
 构建 **Self-Mark App**：一个以"插件市场 + 订阅承诺 + 每日定时双边界提醒"为核心的自律辅助应用。后端 v1 提供：
 
-1. **用户认证**：用户名 + 密码注册登录，JWT 单 token 鉴权
+1. **用户认证**：手机号作为账号 + 密码注册登录，JWT 单 token 鉴权
 2. **插件市场**：展示 System Task（系统预置 3 条）+ 别人发布的 Shared Task
 3. **任务订阅**：用户在市场订阅 Task，**订阅时自行定义 Time Window**
 4. **任务自建**：用户可创建自己的 Private Task；可把 Private Task 单向发布为 Shared Task 进入市场
@@ -41,10 +41,10 @@
 
 ### 认证模块
 
-1. 作为访客，我想用用户名和密码注册账号，以便使用 Self-Mark App
+1. 作为访客，我想用手机号、密码和用户名注册账号，以便使用 Self-Mark App
 2. 作为访客，我想注册时密码被 bcrypt 加密存储，以便即使数据库泄露密码也不会被还原
-3. 作为访客，我想注册时用户名重复被拒绝，以便避免账号冲突
-4. 作为已注册用户，我想用用户名密码登录获得 JWT token，以便后续 API 调用鉴权
+3. 作为访客，我想注册时手机号重复被拒绝，以便一个手机号只对应一个账号
+4. 作为已注册用户，我想用手机号和密码登录获得 JWT token，以便后续 API 调用鉴权
 5. 作为已登录用户，我想登出时 token 加入 Redis 黑名单，以便该 token 立即失效
 6. 作为已登录用户，我想未携带或携带无效 token 访问受保护接口被拒绝，以便资源不被越权访问
 
@@ -82,7 +82,7 @@
 
 ### 数据约束与边界
 
-33. 作为系统，我想 user 表 username 唯一，以便登录冲突可避免
+33. 作为系统，我想 user 表 mobile 唯一，以便登录账号冲突可避免
 34. 作为系统，我想 task 表 type 字段为枚举（SYSTEM/SHARED/PRIVATE），shared 字段为 bool，以便类型与共享状态清晰
 35. 作为系统，我想 subscription 表 (user_id, task_id) 唯一，以便防止重复订阅
 36. 作为系统，我想 System Task 通过启动时 seed 注入（喝水、考研、散步三条），无 creator_id，以便所有用户共享引用
@@ -121,9 +121,9 @@
 ```
 user
 - id              BIGINT PK AUTO_INCREMENT
-- username        VARCHAR(50)  NOT NULL UNIQUE
+- mobile          VARCHAR(20)  NOT NULL UNIQUE -- 登录账号，中国大陆手机号
 - password        VARCHAR(100) NOT NULL  -- bcrypt 加密后
-- nickname        VARCHAR(50)  NULL
+- username        VARCHAR(50)  NOT NULL -- 用户展示名，不用于登录
 - created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
 
 task
@@ -160,8 +160,8 @@ subscription
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
-| POST | /api/auth/register | 否 | body: {username, password, nickname?}；返回 {token, user} |
-| POST | /api/auth/login | 否 | body: {username, password}；返回 {token, user} |
+| POST | /api/auth/register | 否 | body: {mobile, password, username}；返回 {id, account, username, token}，其中 account=mobile |
+| POST | /api/auth/login | 否 | body: {mobile, password}；返回 {id, account, username, token} |
 | POST | /api/auth/logout | 是 | 把当前 token jti 加入 Redis 黑名单（TTL=token 剩余有效期）|
 | GET | /api/tasks/market | 是 | 返回 market 列表：所有 SYSTEM + 所有 SHARED（shared=1）；按 created_at desc |
 | POST | /api/tasks | 是 | body: {name, content}；创建 PRIVATE Task（type=PRIVATE, shared=0, creator_id=me）；同时自动生成一条 Subscription（自己订阅自己，Time Window 由 body 提供）|
@@ -202,7 +202,7 @@ subscription
 - 401：未登录或 token 无效或 token 在黑名单
 - 403：已登录但无权操作（改别人 Task、改别人 Subscription、对 SHARED Task 改/删/撤回等）
 - 404：资源不存在（task_id 或 subscription_id 不存在）
-- 409：冲突（用户名已存在、对同一 task 重复订阅、PRIVATE → SHARED 反向转换）
+- 409：冲突（手机号已注册、对同一 task 重复订阅、PRIVATE → SHARED 反向转换）
 - 500：服务器内部错误
 
 ---
@@ -251,9 +251,9 @@ v1 明确不做：
 - **社交**：无好友、团队、互相监督、关注等
 - **任务搜索 / 分类 / 标签**：market 列表只按 created_at desc 排序，不支持搜索/分类
 - **修改密码 / 找回密码**：v1 不做，密码忘了只能重新注册
-- **手机号 / 邮箱登录**：v1 仅用户名 + 密码；后续可加手机号绑定
+- **短信验证码登录/注册**：v1 已以手机号作为账号，但只支持密码；验证码生成、校验和发送留后续版本
 - **refresh token**：v1 单 token，不做双 token
-- **MQ**：v1 不引入消息队列
+- **MQ**：v1 不引入消息队列；后续短信验证码场景可用 RabbitMQ 异步解耦短信发送，但验证码校验不能只依赖 MQ
 - **服务端推送（FCM/极光）**：v1 仅 APP 本地通知，不接推送服务
 - **管理员后台 / System Task 管理**：v1 System Task 写死在 seed，没有管理员修改入口
 - **任务版本化**：SHARED 冻结，无 version 字段
@@ -281,7 +281,8 @@ v1 明确不做：
 - 服务端推送（FCM/极光）替代/补充本地通知
 - 任务版本化（作者发布新版 + 订阅者自主升级）
 - 管理员后台（管理 System Task、用户管理）
-- 修改密码 / 找回密码（手机号 / 邮箱验证）
+- 修改密码 / 找回密码（短信验证码验证）
+- 短信验证码注册/登录（Redis 保存短期验证码，RabbitMQ 异步投递短信发送任务）
 - 多端登录管控
 
 ### 未决细节（实现时定）

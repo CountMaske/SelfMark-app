@@ -1,0 +1,543 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SelfMark API",
+    "description": "SelfMark 后端接口契约。每个接口完成后导入 Apifox 并按路径和 HTTP 方法匹配更新。",
+    "version": "0.0.1"
+  },
+  "tags": [
+    {
+      "name": "基础设施"
+    },
+    {
+      "name": "认证"
+    }
+  ],
+  "paths": {
+    "/actuator/health": {
+      "get": {
+        "summary": "Actuator 健康检查",
+        "deprecated": false,
+        "description": "",
+        "operationId": "actuatorHealth",
+        "tags": [
+          "基础设施"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "服务可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "examples": [
+                        "UP"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "API 健康检查",
+        "deprecated": false,
+        "description": "",
+        "operationId": "apiHealth",
+        "tags": [
+          "基础设施"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "服务可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseHealth"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "summary": "登出",
+        "deprecated": false,
+        "description": "",
+        "operationId": "logout",
+        "tags": [
+          "认证"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "登出成功，当前 token 的 jti 已加入 Redis 黑名单",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEmpty"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "token 缺失、无效、过期或已登出",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "summary": "注册并登录",
+        "deprecated": false,
+        "description": "",
+        "operationId": "register",
+        "tags": [
+          "认证"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "注册成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseAuth"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "参数缺失或格式错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseError"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "409": {
+            "description": "手机号已注册",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "summary": "登录",
+        "deprecated": false,
+        "description": "",
+        "operationId": "login",
+        "tags": [
+          "认证"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseAuth"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "400": {
+            "description": "参数缺失或格式错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseError"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "手机号不存在或密码错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/users/me": {
+      "get": {
+        "summary": "获取当前登录用户",
+        "deprecated": false,
+        "description": "",
+        "operationId": "getCurrentUser",
+        "tags": [
+          "认证"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "token 有效并返回当前用户",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseUser"
+                }
+              }
+            },
+            "headers": {}
+          },
+          "401": {
+            "description": "token 缺失、无效或过期",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseError"
+                }
+              }
+            },
+            "headers": {}
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "webhooks": {},
+  "components": {
+    "schemas": {
+      "ApiResponseHealth": {
+        "type": "object",
+        "required": [
+          "code",
+          "msg",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "examples": [
+              200
+            ]
+          },
+          "msg": {
+            "type": "string",
+            "examples": [
+              "success"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "examples": [
+                  "UP"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": [
+          "mobile",
+          "password",
+          "username"
+        ],
+        "properties": {
+          "mobile": {
+            "type": "string",
+            "pattern": "^1[3-9]\\d{9}$",
+            "examples": [
+              "13800138000"
+            ]
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "description": "最多 72 个 UTF-8 字节（bcrypt 限制）"
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 50,
+            "examples": [
+              "小明"
+            ]
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "mobile",
+          "password"
+        ],
+        "properties": {
+          "mobile": {
+            "type": "string",
+            "pattern": "^1[3-9]\\d{9}$",
+            "examples": [
+              "13800138000"
+            ]
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "description": "最多 72 个 UTF-8 字节（bcrypt 限制）"
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "account",
+          "username"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "account": {
+            "type": "string",
+            "description": "登录账号，当前等于 mobile",
+            "examples": [
+              "13800138000"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "description": "用户展示名",
+            "examples": [
+              "小明"
+            ]
+          }
+        }
+      },
+      "AuthPayload": {
+        "type": "object",
+        "required": [
+          "id",
+          "account",
+          "username",
+          "token"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "account": {
+            "type": "string",
+            "examples": [
+              "13800138000"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "examples": [
+              "小明"
+            ]
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "ApiResponseAuth": {
+        "type": "object",
+        "required": [
+          "code",
+          "msg",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "examples": [
+              200
+            ]
+          },
+          "msg": {
+            "type": "string",
+            "examples": [
+              "success"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/AuthPayload"
+          }
+        }
+      },
+      "ApiResponseUser": {
+        "type": "object",
+        "required": [
+          "code",
+          "msg",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "examples": [
+              200
+            ]
+          },
+          "msg": {
+            "type": "string",
+            "examples": [
+              "success"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserResponse"
+          }
+        }
+      },
+      "ApiResponseEmpty": {
+        "type": "object",
+        "required": [
+          "code",
+          "msg",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "examples": [
+              200
+            ]
+          },
+          "msg": {
+            "type": "string",
+            "examples": [
+              "success"
+            ]
+          },
+          "data": {
+            "type": "null"
+          }
+        }
+      },
+      "ApiResponseError": {
+        "type": "object",
+        "required": [
+          "code",
+          "msg",
+          "data"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "examples": [
+              401
+            ]
+          },
+          "msg": {
+            "type": "string",
+            "examples": [
+              "手机号或密码错误"
+            ]
+          },
+          "data": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    "responses": {},
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "http://localhost:8080"
+    }
+  ],
+  "security": []
+}

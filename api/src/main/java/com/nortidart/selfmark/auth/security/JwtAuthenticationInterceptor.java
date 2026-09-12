@@ -1,4 +1,4 @@
-package com.nortidart.selfmark.config;
+package com.nortidart.selfmark.auth.security;
 
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nortidart.selfmark.common.context.CurrentUser;
 import com.nortidart.selfmark.common.context.UserContext;
 import com.nortidart.selfmark.common.response.ApiResponse;
-import com.nortidart.selfmark.util.JwtUtil;
+import com.nortidart.selfmark.auth.service.TokenBlacklistService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -19,10 +19,13 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
 
     private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
+    private final TokenBlacklistService tokenBlacklistService;
 
-    public JwtAuthenticationInterceptor(JwtUtil jwtUtil, ObjectMapper objectMapper) {
+    public JwtAuthenticationInterceptor(JwtUtil jwtUtil, ObjectMapper objectMapper,
+            TokenBlacklistService tokenBlacklistService) {
         this.jwtUtil = jwtUtil;
         this.objectMapper = objectMapper;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     @Override
@@ -38,11 +41,23 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
             String token = authorization.substring("Bearer ".length()).trim();
             DecodedJWT jwt = jwtUtil.parse(token);
             Long userId = jwt.getClaim("userId").asLong();
+            if (userId == null && jwt.getSubject() != null) {
+                userId = Long.valueOf(jwt.getSubject());
+            }
             if (userId == null) {
                 writeUnauthorized(response, "token 无效");
                 return false;
             }
-            UserContext.set(new CurrentUser(userId, jwt.getClaim("role").asString(), jwt.getId(), token));
+            String jti = jwt.getId();
+            if (jti == null || jti.isBlank()) {
+                writeUnauthorized(response, "token 无效");
+                return false;
+            }
+            if (tokenBlacklistService.isBlacklisted(jti)) {
+                writeUnauthorized(response, "token 已登出");
+                return false;
+            }
+            UserContext.set(new CurrentUser(userId, jwt.getClaim("role").asString(), jti, token));
             return true;
         } catch (JWTVerificationException | IllegalArgumentException exception) {
             writeUnauthorized(response, "token 无效");

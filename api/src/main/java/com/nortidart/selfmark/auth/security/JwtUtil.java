@@ -1,4 +1,4 @@
-package com.nortidart.selfmark.util;
+package com.nortidart.selfmark.auth.security;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;
@@ -28,16 +28,24 @@ public class JwtUtil {
     }
 
     public String issue(Long userId, String role) {
+        return issue(userId, null, role);
+    }
+
+    public String issue(Long userId, String account, String role) {
         Instant now = Instant.now();
         Instant expiresAt = now.plus(properties.ttl());
-        return JWT.create()
+        var builder = JWT.create()
                 .withIssuer(ISSUER)
                 .withJWTId(UUID.randomUUID().toString())
+                .withSubject(String.valueOf(userId))
                 .withClaim("userId", userId)
                 .withClaim("role", role)
                 .withIssuedAt(Date.from(now))
-                .withExpiresAt(Date.from(expiresAt))
-                .sign(algorithm);
+                .withExpiresAt(Date.from(expiresAt));
+        if (account != null) {
+            builder.withClaim("account", account);
+        }
+        return builder.sign(algorithm);
     }
 
     public DecodedJWT parse(String token) {
