@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.nortidart.selfmark.auth.dto.LoginRequest;
 import com.nortidart.selfmark.auth.dto.RegisterRequest;
-import com.nortidart.selfmark.auth.dto.UserResponse;
 import com.nortidart.selfmark.auth.entity.User;
 import com.nortidart.selfmark.auth.mapper.UserMapper;
 import com.nortidart.selfmark.auth.security.JwtUtil;
@@ -45,52 +44,55 @@ class AuthServiceTests {
             return 1;
         });
 
-        var response = authService.register(new RegisterRequest("alice", "secret123", "Alice"));
+        var response = authService.register(new RegisterRequest("13800138000", "secret123", "Alice"));
 
         assertThat(inserted.get().getPassword()).startsWith("$2").isNotEqualTo("secret123");
         assertThat(new BCryptPasswordEncoder().matches("secret123", inserted.get().getPassword())).isTrue();
-        assertThat(response.user()).isEqualTo(new UserResponse(7L, "alice", "Alice"));
+        assertThat(response.id()).isEqualTo(7L);
+        assertThat(response.account()).isEqualTo("13800138000");
+        assertThat(response.username()).isEqualTo("Alice");
         assertThat(response.token()).isNotBlank();
     }
 
     @Test
-    void duplicateUsernameReturns409() {
+    void duplicateMobileReturns409() {
         when(userMapper.selectCount(any())).thenReturn(1L);
-        assertThatThrownBy(() -> authService.register(new RegisterRequest("alice", "secret123", null)))
+        assertThatThrownBy(() -> authService.register(new RegisterRequest("13800138000", "secret123", "Alice")))
                 .isInstanceOfSatisfying(BusinessException.class, exception -> {
                     assertThat(exception.getCode()).isEqualTo(409);
-                    assertThat(exception.getMessage()).isEqualTo("用户名已存在");
+                    assertThat(exception.getMessage()).isEqualTo("手机号已注册");
                 });
     }
 
     @Test
     void concurrentDuplicateKeyIsMappedTo409() {
         when(userMapper.selectCount(any())).thenReturn(0L);
-        doThrow(new DuplicateKeyException("uk_user_username"))
+        doThrow(new DuplicateKeyException("uk_user_mobile"))
                 .when(userMapper).insert(any(User.class));
 
-        assertThatThrownBy(() -> authService.register(new RegisterRequest("alice", "secret123", null)))
+        assertThatThrownBy(() -> authService.register(new RegisterRequest("13800138000", "secret123", "Alice")))
                 .isInstanceOfSatisfying(BusinessException.class, exception -> {
                     assertThat(exception.getCode()).isEqualTo(409);
-                    assertThat(exception.getMessage()).isEqualTo("用户名已存在");
+                    assertThat(exception.getMessage()).isEqualTo("手机号已注册");
                 });
     }
 
     @Test
     void registeredPasswordCanLogIn() {
-        User user = user(7L, "alice", new BCryptPasswordEncoder().encode("secret123"));
+        User user = user(7L, "13800138000", "Alice", new BCryptPasswordEncoder().encode("secret123"));
         when(userMapper.selectOne(any())).thenReturn(user);
-        assertThat(authService.login(new LoginRequest("alice", "secret123")).user().id()).isEqualTo(7L);
+        assertThat(authService.login(new LoginRequest("13800138000", "secret123")).id()).isEqualTo(7L);
     }
 
     @Test
     void unknownUsernameAndWrongPasswordBothReturn401() {
         when(userMapper.selectOne(any())).thenReturn(null);
-        assertUnauthorized(() -> authService.login(new LoginRequest("missing", "secret123")));
+        assertUnauthorized(() -> authService.login(new LoginRequest("13900139000", "secret123")));
 
         when(userMapper.selectOne(any()))
-                .thenReturn(user(7L, "alice", new BCryptPasswordEncoder().encode("right-password")));
-        assertUnauthorized(() -> authService.login(new LoginRequest("alice", "wrong-password")));
+                .thenReturn(user(7L, "13800138000", "Alice",
+                        new BCryptPasswordEncoder().encode("right-password")));
+        assertUnauthorized(() -> authService.login(new LoginRequest("13800138000", "wrong-password")));
         verify(userMapper, org.mockito.Mockito.times(2)).selectOne(any());
     }
 
@@ -99,9 +101,10 @@ class AuthServiceTests {
                 exception -> assertThat(exception.getCode()).isEqualTo(401));
     }
 
-    private User user(Long id, String username, String password) {
+    private User user(Long id, String mobile, String username, String password) {
         User user = new User();
         user.setId(id);
+        user.setMobile(mobile);
         user.setUsername(username);
         user.setPassword(password);
         return user;

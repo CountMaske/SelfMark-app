@@ -50,23 +50,24 @@ class AuthIntegrationTests {
     @Test
     void registerLoginAndAuthenticationCompleteTheHttpDatabaseLoop() throws Exception {
         String registerJson = """
-                {"username":"integration_user","password":"Password123","nickname":"Integration"}
+                {"mobile":"13800138000","password":"Password123","username":"Integration"}
                 """;
         String registerBody = mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerJson))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
-                .andExpect(jsonPath("$.data.user.username").value("integration_user"))
-                .andExpect(jsonPath("$.data.user.password").doesNotExist())
+                .andExpect(jsonPath("$.data.id").isNumber())
+                .andExpect(jsonPath("$.data.account").value("13800138000"))
+                .andExpect(jsonPath("$.data.username").value("Integration"))
+                .andExpect(jsonPath("$.data.password").doesNotExist())
                 .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
 
         JsonNode registerResponse = objectMapper.readTree(registerBody);
-        String registerToken = registerResponse.at("/data/token").asText();
-        assertProtectedEndpoint(registerToken);
+        assertProtectedEndpoint(registerResponse.at("/data/token").asText(), "13800138000", "Integration");
 
         String storedPassword = jdbcTemplate.queryForObject(
-                "SELECT password FROM user WHERE username = ?", String.class, "integration_user");
+                "SELECT password FROM user WHERE mobile = ?", String.class, "13800138000");
         assertThat(storedPassword).startsWith("$2").hasSize(60).doesNotContain("Password123");
 
         mockMvc.perform(post("/api/auth/register")
@@ -74,58 +75,69 @@ class AuthIntegrationTests {
                         .content(registerJson))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value(409))
-                .andExpect(jsonPath("$.msg").value("用户名已存在"));
+                .andExpect(jsonPath("$.msg").value("手机号已注册"));
 
         String loginBody = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"integration_user\",\"password\":\"Password123\"}"))
+                        .content("{\"mobile\":\"13800138000\",\"password\":\"Password123\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.user.password").doesNotExist())
+                .andExpect(jsonPath("$.data.account").value("13800138000"))
+                .andExpect(jsonPath("$.data.password").doesNotExist())
                 .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        assertProtectedEndpoint(objectMapper.readTree(loginBody).at("/data/token").asText());
+        assertProtectedEndpoint(objectMapper.readTree(loginBody).at("/data/token").asText(),
+                "13800138000", "Integration");
     }
 
     @Test
     void invalidCredentialsAndInvalidInputReturnClientErrors() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"missing_password\"}"))
+                        .content("{\"mobile\":\"13800138001\",\"username\":\"Missing Password\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(400));
 
         String oversizedPassword = "密".repeat(25);
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new Credentials("oversized", oversizedPassword))))
+                        .content(objectMapper.writeValueAsString(
+                                new Registration("13800138002", oversizedPassword, "Oversized"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.msg").value("password 不能超过 72 个 UTF-8 字节"));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"unknown\",\"password\":\"Password123\"}"))
+                        .content("{\"mobile\":\"13900139000\",\"password\":\"Password123\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(401));
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"wrong_password_user\",\"password\":\"Password123\"}"))
+                        .content("{\"mobile\":\"13800138003\",\"password\":\"Password123\","
+                                + "\"username\":\"Wrong Password\"}"))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"wrong_password_user\",\"password\":\"WrongPassword\"}"))
+                        .content("{\"mobile\":\"13800138003\",\"password\":\"WrongPassword\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(401))
-                .andExpect(jsonPath("$.msg").value("用户名或密码错误"));
+                .andExpect(jsonPath("$.msg").value("手机号或密码错误"));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mobile\":\"not-a-mobile\",\"password\":\"Password123\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.msg").value("手机号格式错误"));
     }
 
-    private void assertProtectedEndpoint(String token) throws Exception {
+    private void assertProtectedEndpoint(String token, String account, String username) throws Exception {
         assertThat(token).isNotBlank();
         mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.username").value("integration_user"))
+                .andExpect(jsonPath("$.data.account").value(account))
+                .andExpect(jsonPath("$.data.username").value(username))
                 .andExpect(jsonPath("$.data.password").doesNotExist());
     }
 
-    private record Credentials(String username, String password) { }
+    private record Registration(String mobile, String password, String username) { }
 }
