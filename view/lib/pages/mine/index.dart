@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class MineView extends StatefulWidget {
-  MineView({Key? key}) : super(key: key);
+  const MineView({super.key});
 
   @override
   _MineViewState createState() => _MineViewState();
@@ -43,7 +43,9 @@ class _MineViewState extends State<MineView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        // AppBar 右侧按钮区（水平排布）
         actions: [
+          // // 右上角「扫一扫」入口
           IconButton(icon: Icon(Icons.qr_code_scanner), onPressed: () {}),
           SizedBox(width: 12),
         ],

@@ -5,7 +5,7 @@ import 'package:view/pages/plugin/index.dart';
 import 'package:view/pages/timer/index.dart';
 
 class MainPage extends StatefulWidget {
-  MainPage({Key? key}) : super(key: key);
+  const MainPage({super.key});
 
   @override
   _MainPageState createState() => _MainPageState();

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class PluginView extends StatefulWidget {
-  PluginView({Key? key}) : super(key: key);
+  const PluginView({super.key});
 
   @override
   _PluginViewState createState() => _PluginViewState();

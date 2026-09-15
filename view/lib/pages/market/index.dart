@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class MarketView extends StatefulWidget {
-  MarketView({Key? key}) : super(key: key);
+  const MarketView({super.key});
 
   @override
   _MarketViewState createState() => _MarketViewState();
@@ -10,7 +10,7 @@ class MarketView extends StatefulWidget {
 class _MarketViewState extends State<MarketView> {
   @override
   Widget build(BuildContext context) {
-    return  Center(
+    return Center(
       child: Text('插件市场'),
     );
   }
