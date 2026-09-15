@@ -10,3 +10,5 @@
 Apifox 的受保护接口统一使用 Bearer Auth，Token 值为环境变量 `{{bearerToken}}`。变量本地值只填写 JWT 本身，不含 `Bearer ` 前缀；Auth 面板会自动生成 `Authorization` 请求头，Headers 面板不得重复维护该请求头。
 
 OpenAPI 的维护源文件仍位于 `api/docs/openapi/selfmark.yaml`。每次接口变更后，先更新 YAML 并测试，再导入 Apifox，最后导出 JSON 到本目录。
+
+错误响应不能让所有 HTTP 状态共用一个带固定 `code` 示例的 schema。共享的 `ApiResponseError` 只定义基础结构，各 HTTP response 引用按状态拆分的 schema（例如 `ApiResponseBadRequest`、`ApiResponseUnauthorized`、`ApiResponseConflict`），并在接口响应处提供与业务场景匹配的完整示例。这样 Apifox 展示和契约校验都不会把 400、401、409 混淆。
