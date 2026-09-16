@@ -1,6 +1,14 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import 'dart:ui';
+
+import 'package:view/api/user.dart';
+import 'package:view/stores/TokenManager.dart';
+import 'package:view/stores/UserController.dart';
+import 'package:view/utils/LoadingDialog.dart';
+import 'package:view/utils/ToastUtils.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -21,6 +29,21 @@ class _LoginPageState extends State<LoginPage>
   // late告诉编译器：这个变量我暂时不初始化，但保证在第一次使用前一定会赋值，你不用报错。
   late TabController _tabController;
 
+  // 登录表单的输入控制器
+  TextEditingController _mobileController = TextEditingController(); // 手机号
+  TextEditingController _passwordController = TextEditingController(); // 密码
+  // 注册表单的输入控制器
+  TextEditingController _regMobileController = TextEditingController(); // 手机号
+  TextEditingController _regPasswordController = TextEditingController(); // 密码
+  TextEditingController _regUsernameController = TextEditingController(); // 昵称
+
+  // 两个tab各一个Form的key，用于触发表单校验
+  final GlobalKey<FormState> _loginFormKey = GlobalKey<FormState>();
+  final GlobalKey<FormState> _registerFormKey = GlobalKey<FormState>();
+
+  // 从全局拿用户控制器（MainPage里已经Get.put注册过了）
+  final UserController _userController = Get.find<UserController>();
+
   @override
   void initState() {
     super.initState();
@@ -32,20 +55,134 @@ class _LoginPageState extends State<LoginPage>
   void dispose() {
     // 释放控制器，避免内存泄漏
     _tabController.dispose();
+    // 输入控制器也要释放
+    _mobileController.dispose();
+    _passwordController.dispose();
+    _regMobileController.dispose();
+    _regPasswordController.dispose();
+    _regUsernameController.dispose();
     super.dispose();
   }
+
+  // ==================== 业务逻辑 ====================
+
+  // 登录：校验通过后调接口 → 存用户信息和token → 提示 → 返回上个页面
+  Future<void> _login() async {
+    try {
+      LoadingDialog.show(context, message: "努力登录中");
+      final res = await loginAPI({
+        "mobile": _mobileController.text, // 后端字段名是mobile
+        "password": _passwordController.text,
+      });
+      // 登录成功后 把用户信息赋值给userController
+      _userController.updateUserInfo(res);
+      // 必须await：确保持久化写入完成后再跳转，否则热重启后token丢失
+      await tokenManager.setToken(res.token);
+      // await 期间页面可能已被销毁，先判断再用 context
+      if (!mounted) return;
+      ToastUtils.showToast(context, "登录成功");
+      Navigator.pop(context); // 返回上个页面
+    } catch (e) {
+      // 同样先判断页面是否还在，再用 context 弹提示
+      if (!mounted) return;
+      ToastUtils.showToast(context, (e as DioException).message);
+    } finally {
+      // 页面还在才关 loading，避免操作已销毁的 context
+      if (mounted) {
+        LoadingDialog.hide(context);
+      }
+    }
+  }
+
+  // 注册：后端注册成功直接返回token，注册即登录
+  Future<void> _register() async {
+    try {
+      LoadingDialog.show(context, message: "努力注册中");
+      final res = await registerAPI({
+        "mobile": _regMobileController.text,
+        "password": _regPasswordController.text,
+        "username": _regUsernameController.text, // 后端注册必填昵称
+      });
+      _userController.updateUserInfo(res);
+      await tokenManager.setToken(res.token);
+      if (!mounted) return;
+      ToastUtils.showToast(context, "注册成功");
+      Navigator.pop(context); // 返回上个页面
+    } catch (e) {
+      if (!mounted) return;
+      ToastUtils.showToast(context, (e as DioException).message);
+    } finally {
+      if (mounted) {
+        LoadingDialog.hide(context);
+      }
+    }
+  }
+
+  // ==================== 表单校验 ====================
+
+  // 校验手机号（与后端 @Pattern ^1[3-9]\d{9}$ 保持一致）
+  String? _validateMobile(String? value) {
+    if (value == null || value.isEmpty) {
+      return "手机号不能为空";
+    }
+    if (!RegExp(r"^1[3-9]\d{9}$").hasMatch(value)) {
+      return "手机号格式不正确";
+    }
+    return null;
+  }
+
+  // 校验密码（后端仅限制不超过72字节，这里按6-16位字母数字下划线校验）
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return "密码不能为空";
+    }
+    if (!RegExp(r"^[a-zA-Z0-9_]{6,16}$").hasMatch(value)) {
+      return "请输入6-16位的字母数字或者下划线";
+    }
+    return null;
+  }
+
+  // 校验昵称（后端 @Size(max = 50)）
+  String? _validateUsername(String? value) {
+    if (value == null || value.isEmpty) {
+      return "昵称不能为空";
+    }
+    if (value.length > 50) {
+      return "昵称最长50个字符";
+    }
+    return null;
+  }
+
+  // ==================== UI ====================
 
   Padding _buildLoginTab() {
     return Padding(
       padding: EdgeInsets.all(20),
-      child: Column(
-        children: [
-          _buildTextField('手机号'),
-          SizedBox(height: 20),
-          _buildTextField('密码'),
-          SizedBox(height: 30),
-          _buildGrandientButton('登录'),
-        ],
+      child: Form(
+        key: _loginFormKey, // 绑定key才能用currentState.validate()触发校验
+        child: Column(
+          children: [
+            _buildTextField(
+              '手机号',
+              controller: _mobileController,
+              validator: _validateMobile,
+            ),
+            SizedBox(height: 20),
+            _buildTextField(
+              '密码',
+              controller: _passwordController,
+              obscureText: true, // 密码框隐藏明文
+              validator: _validatePassword,
+            ),
+            SizedBox(height: 30),
+            _buildGrandientButton('登录', onTap: () {
+              // 校验通过才发起登录请求
+              if (_loginFormKey.currentState!.validate()) {
+                _login();
+              }
+            }),
+          ],
+        ),
       ),
     );
   }
@@ -53,31 +190,62 @@ class _LoginPageState extends State<LoginPage>
   Padding _buildRegisterTab() {
     return Padding(
       padding: EdgeInsets.all(20),
-      child: Column(
-        children: [
-          _buildTextField('手机号'),
-          SizedBox(height: 20),
-          _buildTextField('密码'),
-          SizedBox(height: 30),
-          _buildGrandientButton('注册'),
-        ],
-      ), // Column
+      child: Form(
+        key: _registerFormKey,
+        child: Column(
+          children: [
+            _buildTextField(
+              '手机号',
+              controller: _regMobileController,
+              validator: _validateMobile,
+            ),
+            SizedBox(height: 20),
+            _buildTextField(
+              '昵称',
+              controller: _regUsernameController,
+              validator: _validateUsername,
+            ),
+            SizedBox(height: 20),
+            _buildTextField(
+              '密码',
+              controller: _regPasswordController,
+              obscureText: true,
+              validator: _validatePassword,
+            ),
+            SizedBox(height: 30),
+            _buildGrandientButton('注册', onTap: () {
+              if (_registerFormKey.currentState!.validate()) {
+                _register();
+              }
+            }),
+          ],
+        ), // Column
+      ), // Form
     ); // Padding
   }
 
-  TextField _buildTextField(String text) {
-    // 通用输入框：白色文字 + 白色下划线边框
-    return TextField(
+  // 通用输入框：白色文字 + 白色下划线边框
+  // 由TextField换成TextFormField，配合Form才能做输入校验
+  TextFormField _buildTextField(
+    String text, {
+    required TextEditingController controller,
+    String? Function(String?)? validator,
+    bool obscureText = false,
+  }) {
+    return TextFormField(
+      controller: controller, // 输入控制器：代码里读取输入内容
+      validator: validator, // 表单校验函数
+      obscureText: obscureText, // 是否隐藏输入内容（密码框用）
       style: TextStyle(color: Colors.white), // 输入文字颜色
       cursorColor: Colors.white, // 光标颜色
       decoration: InputDecoration(
         hintText: text, // 占位提示
-        hintStyle: TextStyle(color: Colors.white70), // 提示文字颜色 
-        // 未聚焦时的下划线边框      
+        hintStyle: TextStyle(color: Colors.white70), // 提示文字颜色
+        // 未聚焦时的下划线边框
         enabledBorder: UnderlineInputBorder(
           borderSide: BorderSide(color: Colors.white70),
         ),
-         // 聚焦时的下划线边框
+        // 聚焦时的下划线边框
         focusedBorder: UnderlineInputBorder(
           borderSide: BorderSide(color: Colors.white70),
         ),
@@ -86,7 +254,7 @@ class _LoginPageState extends State<LoginPage>
   }
 
   // 渐变按钮：圆角 + 蓝紫渐变背景
-  Container _buildGrandientButton(String text) {
+  Container _buildGrandientButton(String text, {required VoidCallback onTap}) {
     return Container(
       width: double.infinity, // 占满可用宽度
       height: 50, // 按钮高度
@@ -94,13 +262,56 @@ class _LoginPageState extends State<LoginPage>
         borderRadius: BorderRadius.circular(25), // 圆角胶囊形
         gradient: LinearGradient(colors: [Colors.blue, Colors.indigoAccent]), // 渐变配色
       ),
-      child: Center(
-        child: Text(
-          text,
-          style: TextStyle(
-            color: Colors.white, // 按钮文字白色
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+      child: GestureDetector(
+        onTap: onTap, // 点击回调：由调用方决定是登录还是注册
+        behavior: HitTestBehavior.opaque, // 让Container整个区域都可点击
+        child: Center(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: Colors.white, // 按钮文字白色
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 返回按钮：左上角悬浮的圆形按钮
+  // 半透明白底 + 白色半透明边框，与毛玻璃卡片的风格保持统一
+  Positioned _buildBackButton(BuildContext context) {
+    return Positioned(
+      top: 0, // 锚定在 Stack 的左上角
+      left: 0,
+      child: SafeArea(
+        // SafeArea 避开状态栏，防止按钮被状态栏遮挡
+        child: Padding(
+          padding: EdgeInsets.all(16), // 与屏幕边缘留出间距
+          child: GestureDetector(
+            // pop 把路由栈栈顶的登录页弹出，返回上一页（mine 所在的主页）
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 40, // 按钮尺寸
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2), // 半透明白底（同卡片）
+                shape: BoxShape.circle, // 圆形
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.6), // 边框（同卡片）
+                  width: 1,
+                ),
+              ),
+              // Center 让箭头图标在 40x40 的圆形按钮内居中
+              child: Center(
+                child: Icon(
+                  Icons.arrow_back_ios_new, // 返回箭头图标
+                  size: 18,
+                  color: Colors.white, // 白色箭头，与页面文字风格一致
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -126,6 +337,8 @@ class _LoginPageState extends State<LoginPage>
           ),
           // 压暗背景图，让上方文字更清晰
           Container(color: Colors.black.withValues(alpha: 0.3)),
+          // 左上角返回按钮：点击返回 mine 页
+          _buildBackButton(context),
           Center(
             child: ClipRRect(
               // 裁剪圆角，让 BackdropFilter 的模糊也被裁进圆角内

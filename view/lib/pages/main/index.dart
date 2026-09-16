@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:view/api/user.dart';
 import 'package:view/pages/market/index.dart';
 import 'package:view/pages/mine/index.dart';
 import 'package:view/pages/plugin/index.dart';
 import 'package:view/pages/timer/index.dart';
+import 'package:view/stores/TokenManager.dart';
+import 'package:view/stores/UserController.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -42,6 +46,29 @@ class _MainPageState extends State<MainPage> {
   ];
 
   int _currentIndex = 0;
+
+  // 全局注册用户控制器（IndexedStack下四个页面都能通过Get.find拿到）
+  final UserController _userController = Get.put(UserController());
+
+  // 恢复登录状态：token有值说明之前登录过，拉取用户信息回显
+  Future<void> _initUser() async {
+    await tokenManager.init(); // 初始化token
+    if (tokenManager.getToken().isNotEmpty) {
+      // 如果token有值就获取用户信息
+      try {
+        _userController.updateUserInfo(await getUserInfoAPI());
+      } catch (e) {
+        // token过期/失效时静默失败，停留在未登录状态
+        tokenManager.removeToken();
+      }
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initUser();
+  }
 
   List<Widget> _getChildren() {
     return [MarketView(), PluginView(), TimerView(), MineView()];
