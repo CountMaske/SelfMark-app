@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.cors.CorsUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 @Component
@@ -31,6 +32,13 @@ public class JwtAuthenticationInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws IOException {
+        // CORS 预检请求（OPTIONS）不携带 Authorization 头，直接放行，
+        // 交由 Spring MVC 的 PreFlightHandler 统一应答 CORS 头。
+        // 否则预检会被下面的 401 拦截，浏览器报：
+        // "Response to preflight request doesn't pass access control check"。
+        if (CorsUtils.isPreFlightRequest(request)) {
+            return true;
+        }
         String authorization = request.getHeader("Authorization");
         if (authorization == null || !authorization.startsWith("Bearer ")
                 || authorization.length() <= "Bearer ".length()) {
