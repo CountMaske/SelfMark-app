@@ -44,7 +44,7 @@
 
 ### Requirement: Configuration is an opaque object replaced as a whole
 
-`PUT /api/user-plugins/{id}/config` MUST 以请求体本身作为新config并整体替换旧对象；不进行合并、内部字段校验或补默认值。成功 MUST 返回HTTP200及更新后的实例。对象内允许未知字段、嵌套数组、布尔值和null；JSON语义 MUST 保留，原始空白和对象键顺序无需保留。
+`PUT /api/user-plugins/{id}/config` MUST 以请求体本身作为新config并整体替换旧对象；不进行合并、内部字段校验或补默认值。成功 MUST 返回HTTP200及更新后的实例。对象内允许未知字段、嵌套数组、布尔值和null；JSON语义 MUST 在MySQL JSON原生数值精度范围内保留，原始空白和对象键顺序无需保留。需要精确保留的高精度数值 MUST 由调用方使用JSON字符串表达。
 
 #### Scenario: Arbitrary object is stored without plugin schema validation
 - **WHEN** 本人实例的配置被替换为 `{"foo":1,"nested":{"items":[true,null,"中文"]}}`
@@ -53,6 +53,10 @@
 #### Scenario: Empty object is accepted
 - **WHEN** 本人实例提交 `{}`
 - **THEN** config变为 `{}`，原对象的所有字段均被删除
+
+#### Scenario: Precise numeric text remains unchanged
+- **WHEN** 提交 `{"preciseDecimal":"0.123456789012345678"}`
+- **THEN** 更新响应和再次查询均保留该字符串原值，不自动转为数值
 
 #### Scenario: Body is not an envelope
 - **WHEN** 本人实例提交 `{"config":{"foo":1}}`

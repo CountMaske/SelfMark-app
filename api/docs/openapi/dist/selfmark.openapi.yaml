@@ -10,6 +10,8 @@ tags:
     description: 服务存活与健康检查接口。
   - name: 认证
     description: 手机号注册登录、当前用户与 JWT 登出接口。
+  - name: 插件市场
+    description: 平台插件目录及当前用户安装状态。
 paths:
   /actuator/health:
     get:
@@ -205,6 +207,84 @@ paths:
                 code: 500
                 msg: 服务器内部错误
                 data: null
+  /api/plugins:
+    get:
+      summary: 查询插件市场
+      description: 返回全部平台插件及当前用户安装状态，按sort、目录ID升序；未安装插件的实例ID、enabled、config显式为null。用户身份来自JWT。
+      operationId: listPluginMarket
+      tags:
+        - 插件市场
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 市场查询成功；空目录返回空数组。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponsePluginMarket'
+              examples:
+                uninstalled:
+                  summary: 当前用户未安装插件
+                  value:
+                    code: 200
+                    msg: success
+                    data:
+                      - id: 1
+                        code: quadrant-board
+                        name: 画板
+                        description: null
+                        sort: 1
+                        installed: false
+                        userPluginId: null
+                        enabled: null
+                        config: null
+                      - id: 2
+                        code: pomodoro
+                        name: 番茄钟
+                        description: null
+                        sort: 2
+                        installed: false
+                        userPluginId: null
+                        enabled: null
+                        config: null
+                disabled:
+                  summary: 已安装但禁用的实例仍返回配置
+                  value:
+                    code: 200
+                    msg: success
+                    data:
+                      - id: 1
+                        code: quadrant-board
+                        name: 画板
+                        description: null
+                        sort: 1
+                        installed: false
+                        userPluginId: null
+                        enabled: null
+                        config: null
+                      - id: 2
+                        code: pomodoro
+                        name: 番茄钟
+                        description: null
+                        sort: 2
+                        installed: true
+                        userPluginId: 10
+                        enabled: false
+                        config:
+                          label: 专注
+        '401':
+          description: token缺失、无效、过期或已登出。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseUnauthorized'
+              example:
+                code: 401
+                msg: 未登录
+                data: null
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 components:
   securitySchemes:
     bearerAuth:
@@ -212,6 +292,82 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    MarketPlugin:
+      type: object
+      required:
+        - id
+        - code
+        - name
+        - description
+        - sort
+        - installed
+        - userPluginId
+        - enabled
+        - config
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 平台插件目录ID，不是用户实例ID。
+          example: 1
+        code:
+          type: string
+          maxLength: 50
+          description: 稳定且区分大小写的插件标识。
+          example: quadrant-board
+        name:
+          type: string
+          maxLength: 50
+          example: 画板
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+          example: null
+        sort:
+          type: integer
+          description: 升序排列，同值按目录ID升序。
+          example: 1
+        installed:
+          type: boolean
+          description: 禁用实例仍视为已安装。
+          example: false
+        userPluginId:
+          type: integer
+          format: int64
+          nullable: true
+          description: 当前用户的实例ID，未安装时显式null。
+          example: null
+        enabled:
+          type: boolean
+          nullable: true
+          description: 已安装时为布尔值，未安装时显式null。
+          example: null
+        config:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: 当前用户的完整配置对象，未安装时显式null；不是JSON字符串。数值采用MySQL JSON原生精度，高精度值需作为对象中的字符串保存。
+          example: null
+    ApiResponsePluginMarket:
+      type: object
+      required:
+        - code
+        - msg
+        - data
+      properties:
+        code:
+          type: integer
+          enum:
+            - 200
+          example: 200
+        msg:
+          type: string
+          example: success
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketPlugin'
     ApiResponseEmpty:
       type: object
       required:

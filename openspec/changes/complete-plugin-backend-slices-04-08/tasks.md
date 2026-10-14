@@ -4,13 +4,13 @@
 
 ## 1. 切片04：建表、生产seed和市场列表
 
-- [ ] 1.1 新增 `V4__create_plugin_tables.sql`（若版本已占用则使用下一可用版本），按design实现两表、主键、 `uk_plugin_code`、 `uk_user_plugin`、 `idx_user` 和两个CHECK；用MySQL8.4验证空库完整迁移及V3库增量迁移，确认V1到V3未修改。
-- [ ] 1.2 新增生产 `V5__seed_builtin_plugins.sql`（版本跟随建表migration），按code guarded insert两条目录；真实数据库断言code/name/sort、仅两条预置数据、重复初始化不改ID，且生产路径不加载devdata账号。
-- [ ] 1.3 实现Plugin/UserPlugin实体、mapper、config JSON type handler和目录状态投影；验证真实插入及JOIN查询将config序列化为对象，支持中文/嵌套值/数值，未安装enabled/config保持null而非false/字符串。
-- [ ] 1.4 实现带认证上下文的单次LEFT JOIN市场查询及Controller；MockMvc覆盖两条目录、显式null、已安装/禁用状态、sort同值ID排序、空列表、他人状态隔离、无token401，真实SQL用例确认ON中的user_id条件不会丢未安装行。
-- [ ] 1.5 用真实MySQL用例验证code重复、同用户同插件重复、不同用户合法、NOT NULL、JSON根对象CHECK及enabled的0/1 CHECK；检查 `SHOW CREATE TABLE` / `SHOW INDEX`，记录idx_user左前缀冗余和无物理外键取舍，不用mapper mock代替数据库约束证据。
-- [ ] 1.6 增加列表OpenAPI源和对应schema，更新入口及错误码；执行 `bash api/check-api.sh` 确认lint/bundle/breaking检查通过并生成dist YAML，检查未安装三个字段为nullable且installed必为boolean。
-- [ ] 1.7 对新增plugin bean所影响的现有隔离启动/认证/健康测试补必要mock配置，运行本切片测试及认证/启动回归；交付切片04完成方案，列出DDL、索引/约束、seed重启边界、测试结果和Apifox待用户导入导出事项，确认本组文件可单独提交。
+- [x] 1.1 新增 `V4__create_plugin_tables.sql`（若版本已占用则使用下一可用版本），按design实现两表、主键、 `uk_plugin_code`、 `uk_user_plugin`、 `idx_user` 和两个CHECK；用MySQL8.4验证空库完整迁移及V3库增量迁移，确认V1到V3未修改。
+- [x] 1.2 新增生产 `V5__seed_builtin_plugins.sql`（版本跟随建表migration），按code guarded insert两条目录；真实数据库断言code/name/sort、仅两条预置数据、重复初始化不改ID，且生产路径不加载devdata账号。
+- [x] 1.3 实现Plugin/UserPlugin实体、mapper、config JSON type handler和目录状态投影；验证真实插入及JOIN查询将config序列化为对象，支持中文/嵌套值/数值，未安装enabled/config保持null而非false/字符串。
+- [x] 1.4 实现带认证上下文的单次LEFT JOIN市场查询及Controller；MockMvc覆盖两条目录、显式null、已安装/禁用状态、sort同值ID排序、空列表、他人状态隔离、无token401，真实SQL用例确认ON中的user_id条件不会丢未安装行。
+- [x] 1.5 用真实MySQL用例验证code重复、同用户同插件重复、不同用户合法、NOT NULL、JSON根对象CHECK及enabled的0/1 CHECK；检查 `SHOW CREATE TABLE` / `SHOW INDEX`，记录idx_user左前缀冗余和无物理外键取舍，不用mapper mock代替数据库约束证据。
+- [x] 1.6 增加列表OpenAPI源和对应schema，更新入口及错误码；执行 `bash api/check-api.sh` 确认lint/bundle/breaking检查通过并生成dist YAML，检查未安装三个字段为nullable且installed必为boolean。
+- [x] 1.7 对新增plugin bean所影响的现有隔离启动/认证/健康测试补必要mock配置，运行本切片测试及认证/启动回归；交付切片04完成方案，列出DDL、索引/约束、seed重启边界、测试结果和Apifox待用户导入导出事项，确认本组文件可单独提交。
 
 ## 2. 切片05：安装、默认配置和单实例约束
 

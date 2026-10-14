@@ -10,6 +10,8 @@ tags:
     description: 服务存活与健康检查接口。
   - name: 认证
     description: 手机号注册登录、当前用户与 JWT 登出接口。
+  - name: 插件市场
+    description: 平台插件目录及当前用户安装状态。
 paths:
   /actuator/health:
     $ref: './paths/health.yaml#/~1actuator~1health'
@@ -23,11 +25,17 @@ paths:
     $ref: './paths/auth.yaml#/~1api~1auth~1logout'
   /api/users/me:
     $ref: './paths/auth.yaml#/~1api~1users~1me'
+  /api/plugins:
+    $ref: './paths/plugin.yaml#/~1api~1plugins'
 components:
   securitySchemes:
     bearerAuth:
       $ref: './components/security.yaml#/bearerAuth'
   schemas:
+    MarketPlugin:
+      $ref: './components/plugin-schemas.yaml#/MarketPlugin'
+    ApiResponsePluginMarket:
+      $ref: './components/plugin-schemas.yaml#/ApiResponsePluginMarket'
     ApiResponseEmpty:
       $ref: './components/common-schemas.yaml#/ApiResponseEmpty'
     ApiResponseError:

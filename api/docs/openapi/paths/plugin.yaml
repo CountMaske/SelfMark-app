@@ -1,0 +1,38 @@
+/api/plugins:
+  get:
+    summary: 查询插件市场
+    description: 返回全部平台插件及当前用户安装状态，按sort、目录ID升序；未安装插件的实例ID、enabled、config显式为null。用户身份来自JWT。
+    operationId: listPluginMarket
+    tags: [插件市场]
+    security: [{ bearerAuth: [] }]
+    responses:
+      '200':
+        description: 市场查询成功；空目录返回空数组。
+        content:
+          application/json:
+            schema: { $ref: '../components/plugin-schemas.yaml#/ApiResponsePluginMarket' }
+            examples:
+              uninstalled:
+                summary: 当前用户未安装插件
+                value:
+                  code: 200
+                  msg: success
+                  data:
+                    - { id: 1, code: quadrant-board, name: 画板, description: null, sort: 1, installed: false, userPluginId: null, enabled: null, config: null }
+                    - { id: 2, code: pomodoro, name: 番茄钟, description: null, sort: 2, installed: false, userPluginId: null, enabled: null, config: null }
+              disabled:
+                summary: 已安装但禁用的实例仍返回配置
+                value:
+                  code: 200
+                  msg: success
+                  data:
+                    - { id: 1, code: quadrant-board, name: 画板, description: null, sort: 1, installed: false, userPluginId: null, enabled: null, config: null }
+                    - { id: 2, code: pomodoro, name: 番茄钟, description: null, sort: 2, installed: true, userPluginId: 10, enabled: false, config: { label: 专注 } }
+      '401':
+        description: token缺失、无效、过期或已登出。
+        content:
+          application/json:
+            schema: { $ref: '../components/common-schemas.yaml#/ApiResponseUnauthorized' }
+            example: { code: 401, msg: 未登录, data: null }
+      '500':
+        $ref: '../components/responses.yaml#/InternalServerError'

@@ -126,7 +126,7 @@ ORDER BY p.sort ASC, p.id ASC;
 
 实体 `UserPlugin.config` 和响应中的config使用Jackson `JsonNode`/对象节点，DTO中安装状态enabled用可空Boolean。写入使用参数化绑定与JSON type handler；MyBatis-Plus实体启用 `autoResultMap`，自定义JOIN也显式resultMap/type handler，不能以为实体注解会自动处理自定义结果。自定义更新必须使用相同JSON序列化处理，不拼接JSON到SQL。
 
-不创建字符串型config响应：`config` 必须是JSON对象而不是带转义引号的字符串。语义保留允许MySQL改变对象键顺序、空白；数值解析需避免人为转换为double造成精度截断，覆盖整数、小数和中文往返测试。DTO负责输出所需字段，不直接暴露user_id等实体内部字段。
+不创建字符串型config响应：`config` 必须是JSON对象而不是带转义引号的字符串。语义保留允许MySQL改变对象键顺序、空白。2026-10-14实施时经真实数据库测试和用户确认，保留MySQL JSON的原生数值精度：小数可能按double舍入，需要精确保留的高精度值由客户端以JSON字符串表达。type handler以BigDecimal解析数据库返回的小数，避免再次人为截断；覆盖整数、普通小数、高精度字符串和中文往返测试。DTO负责输出所需字段，不直接暴露user_id等实体内部字段。
 
 ### 5. 全切片共享：接口契约和响应结构
 
