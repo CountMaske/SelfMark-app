@@ -13,7 +13,7 @@ tags:
   - name: 插件市场
     description: 平台插件目录及当前用户安装状态。
   - name: 插件实例
-    description: 当前用户已安装插件的配置管理。
+    description: 当前用户已安装插件的配置、启停和卸载管理。
 paths:
   /actuator/health:
     $ref: './paths/health.yaml#/~1actuator~1health'
@@ -33,6 +33,10 @@ paths:
     $ref: './paths/plugin.yaml#/~1api~1plugins~1{code}~1install'
   /api/user-plugins/{id}/config:
     $ref: './paths/plugin.yaml#/~1api~1user-plugins~1{id}~1config'
+  /api/user-plugins/{id}/enabled:
+    $ref: './paths/plugin.yaml#/~1api~1user-plugins~1{id}~1enabled'
+  /api/user-plugins/{id}:
+    $ref: './paths/plugin.yaml#/~1api~1user-plugins~1{id}'
 components:
   securitySchemes:
     bearerAuth:
@@ -46,6 +50,8 @@ components:
       $ref: './components/plugin-schemas.yaml#/InstalledPlugin'
     PluginConfig:
       $ref: './components/plugin-schemas.yaml#/PluginConfig'
+    PluginEnabledRequest:
+      $ref: './components/plugin-schemas.yaml#/PluginEnabledRequest'
     ApiResponseInstalledPlugin:
       $ref: './components/plugin-schemas.yaml#/ApiResponseInstalledPlugin'
     ApiResponseEmpty:

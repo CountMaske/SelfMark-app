@@ -64,12 +64,43 @@ public class PluginService {
 
     @Transactional
     public InstalledPluginResponse replaceConfig(Long userId, Long id, JsonNode config) {
-        if (id == null || id <= 0) {
-            throw new BusinessException(400, "id 必须是正整数");
-        }
+        validateId(id);
         if (config == null || !config.isObject()) {
             throw new BusinessException(400, "config 必须是 JSON 对象");
         }
+        lockOwnedInstance(userId, id);
+        // A same-value UPDATE may report zero changed rows; the locked row still exists.
+        userPluginMapper.replaceConfig(id, userId, config);
+        return installedResponse(id);
+    }
+
+    @Transactional
+    public InstalledPluginResponse setEnabled(Long userId, Long id, JsonNode body) {
+        validateId(id);
+        if (body == null || !body.isObject() || !body.path("enabled").isBoolean()) {
+            throw new BusinessException(400, "enabled 必须是布尔值");
+        }
+        lockOwnedInstance(userId, id);
+        userPluginMapper.setEnabled(id, userId, body.get("enabled").booleanValue());
+        return installedResponse(id);
+    }
+
+    @Transactional
+    public void uninstall(Long userId, Long id) {
+        validateId(id);
+        lockOwnedInstance(userId, id);
+        if (userPluginMapper.deleteOwned(id, userId) != 1) {
+            throw new IllegalStateException("Plugin uninstall did not delete one locked row");
+        }
+    }
+
+    private void validateId(Long id) {
+        if (id == null || id <= 0) {
+            throw new BusinessException(400, "id 必须是正整数");
+        }
+    }
+
+    private void lockOwnedInstance(Long userId, Long id) {
         UserPlugin instance = userPluginMapper.selectByIdForUpdate(id);
         if (instance == null) {
             throw new BusinessException(404, "插件实例不存在");
@@ -77,8 +108,9 @@ public class PluginService {
         if (!userId.equals(instance.getUserId())) {
             throw new BusinessException(403, "无权操作该插件实例");
         }
-        // A same-value UPDATE may report zero changed rows; the locked row still exists.
-        userPluginMapper.replaceConfig(id, userId, config);
+    }
+
+    private InstalledPluginResponse installedResponse(Long id) {
         UserPlugin stored = userPluginMapper.selectById(id);
         if (stored == null) {
             throw new IllegalStateException("Updated plugin could not be read back");

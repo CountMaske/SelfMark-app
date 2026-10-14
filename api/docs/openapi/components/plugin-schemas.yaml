@@ -64,7 +64,15 @@ InstalledPlugin:
       type: object
       additionalProperties: true
       description: 完整配置对象；安装时使用服务端默认值。数值采用MySQL JSON原生精度，高精度值需作为字符串保存。
-    enabled: { type: boolean, description: 当前启用状态；安装成功时为true，配置更新保持原值。, example: true }
+    enabled: { type: boolean, description: 当前启用状态；安装成功时为true，配置更新保持原值，启停仅更新此字段。, example: true }
+
+PluginEnabledRequest:
+  type: object
+  required: [enabled]
+  additionalProperties: true
+  description: enabled必须是JSON布尔值；不转换字符串或数字。其他字段忽略，不修改config、归属、ID或目录关联。
+  properties:
+    enabled: { type: boolean, description: true启用，false禁用；重复提交当前状态仍成功。, example: false }
 
 PluginConfig:
   type: object

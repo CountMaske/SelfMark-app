@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.nortidart.selfmark.plugin.entity.UserPlugin;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Result;
 import org.apache.ibatis.annotations.Results;
@@ -25,4 +26,10 @@ public interface UserPluginMapper extends BaseMapper<UserPlugin> {
             WHERE id = #{id} AND user_id = #{userId}
             """)
     int replaceConfig(@Param("id") Long id, @Param("userId") Long userId, @Param("config") JsonNode config);
+
+    @Update("UPDATE user_plugin SET enabled = #{enabled} WHERE id = #{id} AND user_id = #{userId}")
+    int setEnabled(@Param("id") Long id, @Param("userId") Long userId, @Param("enabled") boolean enabled);
+
+    @Delete("DELETE FROM user_plugin WHERE id = #{id} AND user_id = #{userId}")
+    int deleteOwned(@Param("id") Long id, @Param("userId") Long userId);
 }

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
@@ -26,6 +27,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -444,6 +447,149 @@ class PluginCatalogIntegrationTests {
         assertThat(entry.get("userPluginId").asLong()).isEqualTo(id);
         assertThat(entry.get("config")).isEqualTo(config);
         assertThat(entry.get("enabled").asBoolean()).isEqualTo(enabled);
+    }
+
+    @Test
+    void disablingAndEnablingOnlyChangesEnabledIncludingSameStateRequests() throws Exception {
+        var user = register("13800707001");
+        for (String code : List.of("quadrant-board", "pomodoro")) {
+            long id = response(install(user.token(), code)).at("/data/id").asLong();
+            int index = code.equals("quadrant-board") ? 0 : 1;
+            var config = objectMapper.readTree("{\"label\":\"保留名称\",\"nested\":[null,true,{\"foo\":1}]}");
+            assertStoredConfiguration(user.token(), id, config, true, index);
+            var before = jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id);
+            for (boolean enabled : List.of(false, false, true, true)) {
+                var body = response(mockMvc.perform(put("/api/user-plugins/{id}/enabled", id)
+                                .param("userId", "999").contentType("application/json")
+                                .header("Authorization", "Bearer " + user.token())
+                                .content("{\"enabled\":" + enabled
+                                        + ",\"id\":999,\"userId\":999,\"pluginId\":999,\"config\":{\"foo\":999}}"))
+                        .andExpect(status().isOk()).andReturn());
+                assertThat(body.get("code").asInt()).isEqualTo(200);
+                assertThat(body.get("msg").asText()).isEqualTo("success");
+                var data = body.get("data");
+                assertThat(data.size()).isEqualTo(6);
+                assertThat(data.get("id").asLong()).isEqualTo(id);
+                assertThat(data.get("pluginId").asLong()).isEqualTo(pluginId(code));
+                assertThat(data.get("code").asText()).isEqualTo(code);
+                assertThat(data.get("enabled").asBoolean()).isEqualTo(enabled);
+                assertThat(data.get("config")).isEqualTo(config);
+                var after = jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id);
+                for (String field : List.of("id", "user_id", "plugin_id", "config", "created_at")) {
+                    assertThat(after.get(field)).isEqualTo(before.get(field));
+                }
+                assertThat(userPluginMapper.selectById(id).getEnabled()).isEqualTo(enabled);
+                assertThat(jdbc.update("UPDATE user_plugin SET enabled=enabled WHERE id=?", id)).isZero();
+                var market = market(user.token()).get(index);
+                assertThat(market.get("installed").asBoolean()).isTrue();
+                assertThat(market.get("enabled").asBoolean()).isEqualTo(enabled);
+                assertThat(market.get("config")).isEqualTo(config);
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"quadrant-board", "pomodoro"})
+    void uninstallIsPhysicalAndReinstallHasFreshIdAndCompleteDefaults(String code) throws Exception {
+        var user = register(code.equals("quadrant-board") ? "13800707002" : "13800707003");
+        long oldId = response(install(user.token(), code)).at("/data/id").asLong();
+        int index = code.equals("quadrant-board") ? 0 : 1;
+        assertStoredConfiguration(user.token(), oldId, objectMapper.readTree("{\"custom\":\"已修改\"}"), true, index);
+        mockMvc.perform(put("/api/user-plugins/{id}/enabled", oldId).contentType("application/json")
+                        .header("Authorization", "Bearer " + user.token()).content("{\"enabled\":false}"))
+                .andExpect(status().isOk());
+        var result = response(mockMvc.perform(delete("/api/user-plugins/{id}", oldId)
+                        .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(result.get("code").asInt()).isEqualTo(200);
+        assertThat(result.get("msg").asText()).isEqualTo("success");
+        assertThat(result.has("data")).isTrue();
+        assertThat(result.get("data").isNull()).isTrue();
+        assertThat(userPluginMapper.selectById(oldId)).isNull();
+        assertThat(instanceCount(user.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM plugin", Integer.class)).isEqualTo(2);
+        var entry = market(user.token()).get(index);
+        assertThat(entry.get("code").asText()).isEqualTo(code);
+        assertThat(entry.get("installed").asBoolean()).isFalse();
+        for (String field : List.of("userPluginId", "enabled", "config")) {
+            assertThat(entry.has(field)).isTrue();
+            assertThat(entry.get(field).isNull()).isTrue();
+        }
+        assertOldIdAbsent(user.token(), oldId);
+        var installed = response(install(user.token(), code)).get("data");
+        long newId = installed.get("id").asLong();
+        assertThat(newId).isNotEqualTo(oldId);
+        assertThat(installed.get("enabled").asBoolean()).isTrue();
+        assertThat(installed.get("config")).isEqualTo(defaultConfigFactory.create(code));
+        var before = jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", newId);
+        assertOldIdAbsent(user.token(), oldId);
+        assertThat(jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", newId)).isEqualTo(before);
+        assertThat(userPluginMapper.selectById(oldId)).isNull();
+        assertThat(instanceCount(user.id())).isEqualTo(1);
+        assertThat(market(user.token()).get(index).get("userPluginId").asLong()).isEqualTo(newId);
+    }
+
+    @Test
+    void lifecyclePermissionAndInvalidBooleanFailuresPreserveOriginalRow() throws Exception {
+        var a = register("13800707004");
+        var b = register("13800707005");
+        long id = response(install(a.token(), "pomodoro")).at("/data/id").asLong();
+        var before = jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id);
+        mockMvc.perform(put("/api/user-plugins/{id}/enabled", id).contentType("application/json")
+                        .header("Authorization", "Bearer " + b.token()).content("{\"enabled\":false}"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value(403))
+                .andExpect(jsonPath("$.msg").value("无权操作该插件实例"));
+        mockMvc.perform(delete("/api/user-plugins/{id}", id).header("Authorization", "Bearer " + b.token()))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value(403))
+                .andExpect(jsonPath("$.msg").value("无权操作该插件实例"));
+        mockMvc.perform(put("/api/user-plugins/{id}/enabled", Long.MAX_VALUE).contentType("application/json")
+                        .header("Authorization", "Bearer " + a.token()).content("{\"enabled\":true}"))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value(404))
+                .andExpect(jsonPath("$.msg").value("插件实例不存在"));
+        mockMvc.perform(delete("/api/user-plugins/{id}", Long.MAX_VALUE)
+                        .header("Authorization", "Bearer " + a.token()))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value(404))
+                .andExpect(jsonPath("$.msg").value("插件实例不存在"));
+        mockMvc.perform(put("/api/user-plugins/{id}/enabled", id).contentType("application/json")
+                        .content("{\"enabled\":false}"))
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value(401));
+        mockMvc.perform(delete("/api/user-plugins/{id}", id))
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value(401));
+        for (String body : List.of("null", "[]", "{}", "{\"enabled\":null}", "{\"enabled\":\"true\"}",
+                "{\"enabled\":0}", "{\"enabled\":1}", "{\"enabled\":[]}", "{\"enabled\":{}}")) {
+            mockMvc.perform(put("/api/user-plugins/{id}/enabled", id).contentType("application/json")
+                            .header("Authorization", "Bearer " + a.token()).content(body))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value(400));
+        }
+        assertThat(jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id)).isEqualTo(before);
+        assertThat(instanceCount(b.id())).isZero();
+    }
+
+    @Test
+    void failedEnabledReadbackRollsBackRealStateChange() throws Exception {
+        var user = register("13800707006");
+        long id = response(install(user.token(), "pomodoro")).at("/data/id").asLong();
+        var before = jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id);
+        doThrow(new IllegalStateException("Simulated enabled readback failure"))
+                .when(userPluginMapper).selectById(id);
+        mockMvc.perform(put("/api/user-plugins/{id}/enabled", id).contentType("application/json")
+                        .header("Authorization", "Bearer " + user.token()).content("{\"enabled\":false}"))
+                .andExpect(status().isInternalServerError()).andExpect(jsonPath("$.code").value(500))
+                .andExpect(jsonPath("$.msg").value("服务器内部错误"));
+        assertThat(jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id)).isEqualTo(before);
+    }
+
+    private void assertOldIdAbsent(String token, long id) throws Exception {
+        mockMvc.perform(delete("/api/user-plugins/{id}", id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value(404))
+                .andExpect(jsonPath("$.msg").value("插件实例不存在"));
+        for (String operation : List.of("config", "enabled")) {
+            mockMvc.perform(put("/api/user-plugins/{id}/{operation}", id, operation)
+                            .contentType("application/json").header("Authorization", "Bearer " + token)
+                            .content(operation.equals("config") ? "{}" : "{\"enabled\":true}"))
+                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value(404))
+                    .andExpect(jsonPath("$.msg").value("插件实例不存在"));
+        }
     }
 
     private MvcResult install(String token, String code) throws Exception {
