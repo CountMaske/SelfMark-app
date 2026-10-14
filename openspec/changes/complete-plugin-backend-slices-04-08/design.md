@@ -38,10 +38,10 @@
 | 切片 | 实施范围 | 独立交付和验收 | 建议commit标题 |
 | --- | --- | --- | --- |
 | 04 | 建表、生产目录seed、实体/mapper、列表 | DDL与索引检查、初始化、当前用户状态、列表契约 | `feat(plugin): add catalog schema seed and market list` |
-| 05 | 安装、默认值、重复冲突转换 | 默认JSON、单实例、并发冲突、安装契约 | `feat(plugin): install plugins with default config` |
-| 06 | 配置对象整体替换 | 原始body、权限、类型错误、禁用配置保留 | `feat(plugin): replace installed plugin config` |
-| 07 | 严格布尔启停、物理卸载 | 同状态PUT、配置保留、重装默认值、旧ID404 | `feat(plugin): enable disable and uninstall plugins` |
-| 08 | 真实集成闭环与必要缺陷修复 | 全量测试、隔离、seed重启、真实约束与并发证据 | `test(plugin): cover lifecycle and user isolation` |
+| 05 | 安装、默认值、重复冲突转换 | 默认JSON、单实例、并发冲突、安装契约 | `feat(slice-05): install plugins with default config` |
+| 06 | 配置对象整体替换 | 原始body、权限、类型错误、禁用配置保留 | `feat(slice-06): replace installed plugin config` |
+| 07 | 严格布尔启停、物理卸载 | 同状态PUT、配置保留、重装默认值、旧ID404 | `feat(slice-07): enable disable and uninstall plugins` |
+| 08 | 真实集成闭环与必要缺陷修复 | 全量测试、隔离、seed重启、真实约束与并发证据 | `test(slice-08): cover lifecycle and user isolation` |
 
 每个切片在 `后端项目文档/skill/solutions/` 新增对应 `slice-0N-...-solution.md`，沿用现有02、03完成方案模式，记录实际文件、边界、验收命令、结果和未运行项。本设计是计划，不预先标记任何实现或验收已完成。
 

@@ -25,15 +25,19 @@
 | 500 | 服务器内部错误 | Redis 黑名单写入或查询失败；鉴权保持 fail-closed，不降级到本地内存 |
 | 409 | 手机号已注册 | 注册手机号已存在，包括并发唯一索引冲突 |
 
-## 插件模块（切片04）
+## 插件模块（切片04、05）
 
 | HTTP/code | msg | 使用场景 |
 | ---: | --- | --- |
-| 401 | 未登录 | `GET /api/plugins` 缺少Bearer token |
+| 401 | 未登录 | 市场查询或安装接口缺少Bearer token |
 | 401 | token 无效 | token签名、格式、声明或有效期不合法 |
 | 401 | token 已登出 | token命中Redis黑名单 |
-| 500 | 服务器内部错误 | 市场数据库查询或Redis黑名单查询失败 |
+| 404 | 插件不存在 | 安装code不存在，或大小写/空白不匹配 |
+| 409 | 插件已安装 | 同用户同插件已安装（包括禁用状态），或实例INSERT发生唯一冲突 |
+| 500 | 服务器内部错误 | 数据库或Redis故障，目录缺少默认配置，或安装回读/响应构造失败 |
 
-市场查询成功使用HTTP200和 `code:200`，空目录返回 `data:[]`。未安装的条目仍返回，且 `userPluginId`、`enabled`、`config` 显式为null；已禁用实例的 `installed` 仍为true。切片04只提供查询，不提供安装或实例更新接口。
+市场查询成功使用HTTP200和 `code:200`，空目录返回 `data:[]`。未安装的条目仍返回，且 `userPluginId`、`enabled`、`config` 显式为null；已禁用实例的 `installed` 仍为true。
+
+`POST /api/plugins/{code}/install` 无需请求体，身份及完整默认配置由服务端决定；成功使用HTTP200（不是201），返回实例的 `id/pluginId/code/name/config/enabled`。重复安装不会重置原配置、状态或ID。非唯一冲突的数据库错误不转换为409；失败响应均保持 `data:null`。
 
 当前项目使用 HTTP 状态码同时作为响应体 `code`，即 HTTP 401 的响应体也必须是 `code: 401`。这里的 `code` 不是独立业务码；后续新增业务模块时继续补充稳定的 `msg`，避免同一场景出现多个消息文本。若未来引入 10xxx 等独立业务码，应新增 `errorCode` 字段或统一迁移 `code` 的语义，不能让同一字段有时表示 HTTP 状态、有时表示业务码。

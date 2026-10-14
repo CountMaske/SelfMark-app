@@ -2,6 +2,7 @@ package com.nortidart.selfmark;
 
 import com.nortidart.selfmark.auth.mapper.UserMapper;
 import com.nortidart.selfmark.plugin.mapper.PluginMapper;
+import com.nortidart.selfmark.plugin.mapper.UserPluginMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -18,6 +19,9 @@ class ApiApplicationTests {
 
     @MockitoBean
     PluginMapper pluginMapper;
+
+    @MockitoBean
+    UserPluginMapper userPluginMapper;
 
     @Test
     void contextLoads() {

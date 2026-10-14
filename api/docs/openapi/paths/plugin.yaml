@@ -36,3 +36,76 @@
             example: { code: 401, msg: 未登录, data: null }
       '500':
         $ref: '../components/responses.yaml#/InternalServerError'
+
+/api/plugins/{code}/install:
+  post:
+    summary: 安装插件
+    description: 使用JWT中的用户身份、精确且区分大小写的目录code创建实例；无需请求体，客户端不能指定归属、默认配置或enabled。成功返回HTTP200及完整默认配置，enabled=true。同用户同插件只能安装一次，已禁用仍返回409且保留原实例；并发安装由数据库唯一键保护。目录存在但缺少默认配置时返回500，不留下实例。
+    operationId: installPlugin
+    tags: [插件市场]
+    security: [{ bearerAuth: [] }]
+    parameters:
+      - name: code
+        in: path
+        required: true
+        description: 精确目录标识；不转换大小写或去除空白。
+        schema: { type: string, example: quadrant-board }
+    responses:
+      '200':
+        description: 安装成功；id是新实例ID，pluginId是目录ID。
+        content:
+          application/json:
+            schema: { $ref: '../components/plugin-schemas.yaml#/ApiResponseInstalledPlugin' }
+            examples:
+              board:
+                summary: 画板完整默认配置
+                value:
+                  code: 200
+                  msg: success
+                  data:
+                    id: 11
+                    pluginId: 1
+                    code: quadrant-board
+                    name: 画板
+                    enabled: true
+                    config:
+                      active: quadrant
+                      quadrant:
+                        xAxisLabel: 紧急度
+                        yAxisLabel: 重要度
+                        regions:
+                          - { key: q1, name: 重要且紧急 }
+                          - { key: q2, name: 重要不紧急 }
+                          - { key: q3, name: 紧急不重要 }
+                          - { key: q4, name: 不重要不紧急 }
+                      pyramid:
+                        regions:
+                          - { key: p1, name: 顶层目标 }
+                          - { key: p2, name: 中层计划 }
+                          - { key: p3, name: 底层行动 }
+              pomodoro:
+                summary: 番茄钟默认配置
+                value:
+                  code: 200
+                  msg: success
+                  data: { id: 12, pluginId: 2, code: pomodoro, name: 番茄钟, config: { label: 专注 }, enabled: true }
+      '401':
+        description: token缺失、无效、过期或已登出。
+        content:
+          application/json:
+            schema: { $ref: '../components/common-schemas.yaml#/ApiResponseUnauthorized' }
+            example: { code: 401, msg: 未登录, data: null }
+      '404':
+        description: 精确code查不到目录，包括大小写不匹配。
+        content:
+          application/json:
+            schema: { $ref: '../components/common-schemas.yaml#/ApiResponseNotFound' }
+            example: { code: 404, msg: 插件不存在, data: null }
+      '409':
+        description: 已安装或并发INSERT触发唯一冲突；不修改原实例。
+        content:
+          application/json:
+            schema: { $ref: '../components/common-schemas.yaml#/ApiResponseConflict' }
+            example: { code: 409, msg: 插件已安装, data: null }
+      '500':
+        $ref: '../components/responses.yaml#/InternalServerError'

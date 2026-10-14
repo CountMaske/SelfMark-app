@@ -27,6 +27,8 @@ paths:
     $ref: './paths/auth.yaml#/~1api~1users~1me'
   /api/plugins:
     $ref: './paths/plugin.yaml#/~1api~1plugins'
+  /api/plugins/{code}/install:
+    $ref: './paths/plugin.yaml#/~1api~1plugins~1{code}~1install'
 components:
   securitySchemes:
     bearerAuth:
@@ -36,6 +38,10 @@ components:
       $ref: './components/plugin-schemas.yaml#/MarketPlugin'
     ApiResponsePluginMarket:
       $ref: './components/plugin-schemas.yaml#/ApiResponsePluginMarket'
+    InstalledPlugin:
+      $ref: './components/plugin-schemas.yaml#/InstalledPlugin'
+    ApiResponseInstalledPlugin:
+      $ref: './components/plugin-schemas.yaml#/ApiResponseInstalledPlugin'
     ApiResponseEmpty:
       $ref: './components/common-schemas.yaml#/ApiResponseEmpty'
     ApiResponseError:
@@ -46,6 +52,8 @@ components:
       $ref: './components/common-schemas.yaml#/ApiResponseUnauthorized'
     ApiResponseConflict:
       $ref: './components/common-schemas.yaml#/ApiResponseConflict'
+    ApiResponseNotFound:
+      $ref: './components/common-schemas.yaml#/ApiResponseNotFound'
     ApiResponseInternalServerError:
       $ref: './components/common-schemas.yaml#/ApiResponseInternalServerError'
     ApiResponseHealth:

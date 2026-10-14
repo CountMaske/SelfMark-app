@@ -2,6 +2,7 @@ package com.nortidart.selfmark;
 
 import com.nortidart.selfmark.auth.mapper.UserMapper;
 import com.nortidart.selfmark.plugin.mapper.PluginMapper;
+import com.nortidart.selfmark.plugin.mapper.UserPluginMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -32,6 +33,9 @@ class HealthEndpointTests {
 
     @MockitoBean
     PluginMapper pluginMapper;
+
+    @MockitoBean
+    UserPluginMapper userPluginMapper;
 
     @Autowired
     private MockMvc mockMvc;

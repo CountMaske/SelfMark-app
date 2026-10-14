@@ -2,20 +2,27 @@ package com.nortidart.selfmark.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nortidart.selfmark.plugin.entity.UserPlugin;
 import com.nortidart.selfmark.plugin.mapper.PluginMapper;
 import com.nortidart.selfmark.plugin.mapper.UserPluginMapper;
+import com.nortidart.selfmark.plugin.service.DefaultPluginConfigFactory;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +33,9 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -57,7 +66,8 @@ class PluginCatalogIntegrationTests {
     @Autowired ObjectMapper objectMapper;
     @Autowired JdbcTemplate jdbc;
     @Autowired PluginMapper pluginMapper;
-    @Autowired UserPluginMapper userPluginMapper;
+    @MockitoSpyBean UserPluginMapper userPluginMapper;
+    @Autowired DefaultPluginConfigFactory defaultConfigFactory;
     private final List<Long> users = new ArrayList<>();
 
     @AfterEach
@@ -200,6 +210,147 @@ class PluginCatalogIntegrationTests {
     private void insert(Long user, Long plugin, String config, Integer enabled) {
         jdbc.update("INSERT INTO user_plugin(user_id,plugin_id,config,enabled) VALUES (?,?,?,?)",
                 user, plugin, config, enabled);
+    }
+
+    @Test
+    void installsBothPluginsWithServerDefaultsAndMarketDatabaseConsistency() throws Exception {
+        var user = register("13800505001");
+        var other = register("13800505002");
+        for (String code : List.of("quadrant-board", "pomodoro")) {
+            var result = mockMvc.perform(post("/api/plugins/{code}/install", code)
+                            .param("userId", Long.toString(other.id()))
+                            .header("Authorization", "Bearer " + user.token())
+                            .contentType("application/json")
+                            .content("{\"enabled\":false,\"config\":{},\"userId\":" + other.id() + "}"))
+                    .andExpect(status().isOk()).andReturn();
+            var response = response(result);
+            assertThat(response.get("code").asInt()).isEqualTo(200);
+            assertThat(response.get("msg").asText()).isEqualTo("success");
+            var data = response.get("data");
+            assertThat(data.size()).isEqualTo(6);
+            assertThat(data.get("pluginId").asLong()).isEqualTo(pluginId(code));
+            assertThat(data.get("code").asText()).isEqualTo(code);
+            assertThat(data.get("name").asText()).isEqualTo(code.equals("pomodoro") ? "番茄钟" : "画板");
+            assertThat(data.get("enabled").asBoolean()).isTrue();
+            assertThat(data.get("config")).isEqualTo(defaultConfigFactory.create(code));
+            var stored = userPluginMapper.selectById(data.get("id").asLong());
+            assertThat(stored.getUserId()).isEqualTo(user.id());
+            assertThat(stored.getPluginId()).isEqualTo(pluginId(code));
+            assertThat(stored.getConfig()).isEqualTo(data.get("config"));
+            assertThat(stored.getEnabled()).isTrue();
+            var entry = market(user.token()).get(code.equals("pomodoro") ? 1 : 0);
+            assertThat(entry.get("installed").asBoolean()).isTrue();
+            assertThat(entry.get("userPluginId")).isEqualTo(data.get("id"));
+            assertThat(entry.get("config")).isEqualTo(data.get("config"));
+            assertThat(entry.get("enabled")).isEqualTo(data.get("enabled"));
+        }
+        for (JsonNode entry : market(other.token())) {
+            assertThat(entry.get("installed").asBoolean()).isFalse();
+        }
+    }
+
+    @Test
+    void unknownAndDifferentCaseCodesAre404WithoutInstalling() throws Exception {
+        var user = register("13800505003");
+        for (String code : List.of("unknown", "Quadrant-Board", "POMODORO", "pomodoro ")) {
+            mockMvc.perform(post("/api/plugins/{code}/install", code)
+                            .header("Authorization", "Bearer " + user.token()))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value(404))
+                    .andExpect(jsonPath("$.msg").value("插件不存在"))
+                    .andExpect(jsonPath("$.data").isEmpty());
+        }
+        assertThat(instanceCount(user.id())).isZero();
+    }
+
+    @Test
+    void enabledAndDisabledDuplicatesPreserveOriginalInstance() throws Exception {
+        var user = register("13800505004");
+        long id = response(install(user.token(), "pomodoro")).at("/data/id").asLong();
+        for (boolean enabled : List.of(true, false)) {
+            jdbc.update("UPDATE user_plugin SET config=?, enabled=? WHERE id=?",
+                    "{\"label\":\"自定义\",\"nested\":[null,true]}", enabled, id);
+            var before = jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id);
+            mockMvc.perform(post("/api/plugins/pomodoro/install")
+                            .header("Authorization", "Bearer " + user.token()))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value(409))
+                    .andExpect(jsonPath("$.msg").value("插件已安装"))
+                    .andExpect(jsonPath("$.data").isEmpty());
+            assertThat(jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id)).isEqualTo(before);
+            assertThat(instanceCount(user.id())).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void registeredCodeWithoutDefaultsFailsWithNoResidue() throws Exception {
+        var user = register("13800505005");
+        jdbc.update("INSERT INTO plugin(code,name,sort) VALUES ('unconfigured-test','未配置',99)");
+        try {
+            mockMvc.perform(post("/api/plugins/unconfigured-test/install")
+                            .header("Authorization", "Bearer " + user.token()))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.code").value(500))
+                    .andExpect(jsonPath("$.msg").value("服务器内部错误"));
+            assertThat(instanceCount(user.id())).isZero();
+        } finally {
+            jdbc.update("DELETE FROM plugin WHERE code='unconfigured-test'");
+        }
+    }
+
+    @Test
+    void responseReadbackFailureRollsBackRealInsert() throws Exception {
+        var user = register("13800505006");
+        doThrow(new IllegalStateException("Simulated readback failure"))
+                .when(userPluginMapper).selectById(anyLong());
+        mockMvc.perform(post("/api/plugins/pomodoro/install")
+                        .header("Authorization", "Bearer " + user.token()))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.msg").value("服务器内部错误"));
+        assertThat(instanceCount(user.id())).isZero();
+    }
+
+    @Test
+    void concurrentInstallationHasOneSuccessOneConflictAndOneRow() throws Exception {
+        var user = register("13800505007");
+        var barrier = new CyclicBarrier(2);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<JsonNode> request = () -> {
+                barrier.await(10, TimeUnit.SECONDS);
+                var result = mockMvc.perform(post("/api/plugins/quadrant-board/install")
+                                .header("Authorization", "Bearer " + user.token())).andReturn();
+                var body = response(result);
+                assertThat(body.get("code").asInt()).isEqualTo(result.getResponse().getStatus());
+                return body;
+            };
+            var a = executor.submit(request);
+            var b = executor.submit(request);
+            var responses = List.of(a.get(30, TimeUnit.SECONDS), b.get(30, TimeUnit.SECONDS));
+            assertThat(responses.stream().map(body -> body.get("code").asInt()).toList())
+                    .containsExactlyInAnyOrder(200, 409);
+            var success = responses.stream().filter(body -> body.get("code").asInt() == 200).findFirst().orElseThrow();
+            var conflict = responses.stream().filter(body -> body.get("code").asInt() == 409).findFirst().orElseThrow();
+            assertThat(conflict.get("msg").asText()).isEqualTo("插件已安装");
+            assertThat(conflict.get("data").isNull()).isTrue();
+            assertThat(instanceCount(user.id())).isEqualTo(1);
+            var stored = userPluginMapper.selectById(success.at("/data/id").asLong());
+            assertThat(stored.getConfig()).isEqualTo(defaultConfigFactory.create("quadrant-board"));
+            assertThat(stored.getEnabled()).isTrue();
+        }
+    }
+
+    private int instanceCount(long userId) {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM user_plugin WHERE user_id=?", Integer.class, userId);
+    }
+
+    private MvcResult install(String token, String code) throws Exception {
+        return mockMvc.perform(post("/api/plugins/{code}/install", code)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andReturn();
+    }
+
+    private JsonNode response(MvcResult result) throws Exception {
+        return objectMapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8));
     }
 
     private void assertSqlRejected(Runnable insert, int mysqlError) {

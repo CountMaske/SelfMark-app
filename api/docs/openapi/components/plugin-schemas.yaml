@@ -43,3 +43,33 @@ ApiResponsePluginMarket:
     data:
       type: array
       items: { $ref: '#/MarketPlugin' }
+
+InstalledPlugin:
+  type: object
+  required: [id, pluginId, code, name, config, enabled]
+  properties:
+    id:
+      type: integer
+      format: int64
+      description: 当前用户的插件实例ID，不是目录ID。
+      example: 11
+    pluginId:
+      type: integer
+      format: int64
+      description: 平台插件目录ID。
+      example: 1
+    code: { type: string, maxLength: 50, example: quadrant-board }
+    name: { type: string, maxLength: 50, example: 画板 }
+    config:
+      type: object
+      additionalProperties: true
+      description: 完整配置对象；安装时使用服务端默认值。数值采用MySQL JSON原生精度，高精度值需作为字符串保存。
+    enabled: { type: boolean, description: 安装成功时为true。, example: true }
+
+ApiResponseInstalledPlugin:
+  type: object
+  required: [code, msg, data]
+  properties:
+    code: { type: integer, enum: [200], example: 200 }
+    msg: { type: string, example: success }
+    data: { $ref: '#/InstalledPlugin' }

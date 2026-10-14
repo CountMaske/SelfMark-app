@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -16,6 +17,7 @@ import com.nortidart.selfmark.auth.service.TokenBlacklistService;
 import com.nortidart.selfmark.common.context.UserContext;
 import com.nortidart.selfmark.plugin.dto.MarketPluginResponse;
 import com.nortidart.selfmark.plugin.mapper.PluginMapper;
+import com.nortidart.selfmark.plugin.mapper.UserPluginMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class PluginControllerTests {
     @MockitoBean UserMapper userMapper;
     @MockitoBean PluginMapper pluginMapper;
+    @MockitoBean UserPluginMapper userPluginMapper;
     @MockitoBean TokenBlacklistService tokenBlacklistService;
     @Autowired MockMvc mockMvc;
     @Autowired JwtUtil jwtUtil;
@@ -105,5 +108,14 @@ class PluginControllerTests {
         result.setName(name);
         result.setSort(sort);
         return result;
+    }
+
+    @Test
+    void unauthenticatedInstallationDoesNotReachPersistence() throws Exception {
+        mockMvc.perform(post("/api/plugins/quadrant-board/install"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(401))
+                .andExpect(jsonPath("$.msg").value("未登录"));
+        verifyNoInteractions(pluginMapper, userPluginMapper);
     }
 }
