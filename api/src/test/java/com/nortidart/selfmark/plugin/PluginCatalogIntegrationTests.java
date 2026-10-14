@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
@@ -49,7 +50,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class PluginCatalogIntegrationTests {
     @Container static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4")
-            .withDatabaseName("selfmark").withUsername("selfmark").withPassword("selfmark");
+            .withDatabaseName("selfmark").withUsername("selfmark").withPassword("selfmark")
+            .withUrlParam("useAffectedRows", "true");
     @Container static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4-alpine")
             .withExposedPorts(6379);
 
@@ -341,6 +343,107 @@ class PluginCatalogIntegrationTests {
 
     private int instanceCount(long userId) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM user_plugin WHERE user_id=?", Integer.class, userId);
+    }
+
+    @Test
+    void boardConfigurationIsReplacedAndSwitchesStructuresWithoutImplicitMerge() throws Exception {
+        var user = register("13800606001");
+        long id = response(install(user.token(), "quadrant-board")).at("/data/id").asLong();
+        var config = defaultConfigFactory.create("quadrant-board");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) config.get("quadrant")).put("xAxisLabel", "截止时间");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) config.at("/quadrant/regions/0")).put("name", "马上办");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) config.at("/pyramid/regions/0")).put("name", "年度目标");
+        assertStoredConfiguration(user.token(), id, config, true, 0);
+        config.put("active", "pyramid");
+        assertStoredConfiguration(user.token(), id, config, true, 0);
+        config.remove("quadrant");
+        assertStoredConfiguration(user.token(), id, config, true, 0);
+        assertThat(userPluginMapper.selectById(id).getConfig().has("quadrant")).isFalse();
+        assertStoredConfiguration(user.token(), id, objectMapper.createObjectNode(), true, 0);
+    }
+
+    @Test
+    void arbitraryConfigurationAndLiteralEnvelopePersistWithoutChangingDisabledState() throws Exception {
+        var user = register("13800606002");
+        long id = response(install(user.token(), "pomodoro")).at("/data/id").asLong();
+        jdbc.update("UPDATE user_plugin SET enabled=0 WHERE id=?", id);
+        var config = objectMapper.createObjectNode();
+        config.put("foo", 1);
+        config.put("label", "午间专注");
+        config.put("integer", 9007199254740993L);
+        config.put("decimal", 0.125);
+        config.put("preciseDecimal", "0.123456789012345678");
+        config.put("largeText", "中".repeat(5000));
+        config.putNull("unknown");
+        config.putObject("nested").putArray("items").add(true).addNull().add("中文").addObject().put("escaped", "'\\\"\\\\");
+        assertStoredConfiguration(user.token(), id, config, false, 1);
+        assertThat(jdbc.update("UPDATE user_plugin SET config=config WHERE id=?", id)).isZero();
+        assertStoredConfiguration(user.token(), id, config, false, 1);
+        var wrapped = objectMapper.readTree("{\"config\":{\"foo\":1},\"userId\":999,\"enabled\":true}");
+        assertStoredConfiguration(user.token(), id, wrapped, false, 1);
+        assertThat(userPluginMapper.selectById(id).getUserId()).isEqualTo(user.id());
+    }
+
+    @Test
+    void configurationErrorsAndOtherOwnerLeaveOriginalRowUnchanged() throws Exception {
+        var a = register("13800606003");
+        var b = register("13800606004");
+        long id = response(install(a.token(), "pomodoro")).at("/data/id").asLong();
+        var before = jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id);
+        mockMvc.perform(put("/api/user-plugins/{id}/config", id).contentType("application/json")
+                        .header("Authorization", "Bearer " + b.token()).content("{}"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value(403))
+                .andExpect(jsonPath("$.msg").value("无权操作该插件实例"));
+        mockMvc.perform(put("/api/user-plugins/{id}/config", Long.MAX_VALUE).contentType("application/json")
+                        .header("Authorization", "Bearer " + a.token()).content("{}"))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value(404))
+                .andExpect(jsonPath("$.msg").value("插件实例不存在"));
+        mockMvc.perform(put("/api/user-plugins/{id}/config", id).contentType("application/json").content("{}"))
+                .andExpect(status().isUnauthorized());
+        for (String invalid : List.of("", "{invalid", "null", "[]", "1", "true", "\"text\"")) {
+            mockMvc.perform(put("/api/user-plugins/{id}/config", id).contentType("application/json")
+                            .header("Authorization", "Bearer " + a.token()).content(invalid))
+                    .andExpect(status().isBadRequest());
+        }
+        mockMvc.perform(put("/api/user-plugins/{id}/config", id).contentType("text/plain")
+                        .header("Authorization", "Bearer " + a.token()).content("{}"))
+                .andExpect(status().isUnsupportedMediaType());
+        assertThat(jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id)).isEqualTo(before);
+    }
+
+    @Test
+    void failedConfigurationReadbackRollsBackRealUpdate() throws Exception {
+        var user = register("13800606005");
+        long id = response(install(user.token(), "pomodoro")).at("/data/id").asLong();
+        var before = jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id);
+        doThrow(new IllegalStateException("Simulated config readback failure"))
+                .when(userPluginMapper).selectById(id);
+        mockMvc.perform(put("/api/user-plugins/{id}/config", id).contentType("application/json")
+                        .header("Authorization", "Bearer " + user.token()).content("{\"label\":\"新值\"}"))
+                .andExpect(status().isInternalServerError());
+        assertThat(jdbc.queryForMap("SELECT * FROM user_plugin WHERE id=?", id)).isEqualTo(before);
+    }
+
+    private void assertStoredConfiguration(String token, long id, JsonNode config, boolean enabled, int marketIndex)
+            throws Exception {
+        var body = response(mockMvc.perform(put("/api/user-plugins/{id}/config", id)
+                        .param("userId", "999").contentType("application/json")
+                        .header("Authorization", "Bearer " + token).content(config.toString()))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(body.get("code").asInt()).isEqualTo(200);
+        assertThat(body.get("msg").asText()).isEqualTo("success");
+        var data = body.get("data");
+        assertThat(data.size()).isEqualTo(6);
+        assertThat(data.get("id").asLong()).isEqualTo(id);
+        assertThat(data.get("enabled").asBoolean()).isEqualTo(enabled);
+        assertThat(data.get("config")).isEqualTo(config);
+        var stored = userPluginMapper.selectById(id);
+        assertThat(objectMapper.readTree(stored.getConfig().toString())).isEqualTo(config);
+        assertThat(stored.getEnabled()).isEqualTo(enabled);
+        var entry = market(token).get(marketIndex);
+        assertThat(entry.get("userPluginId").asLong()).isEqualTo(id);
+        assertThat(entry.get("config")).isEqualTo(config);
+        assertThat(entry.get("enabled").asBoolean()).isEqualTo(enabled);
     }
 
     private MvcResult install(String token, String code) throws Exception {

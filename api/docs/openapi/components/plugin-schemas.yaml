@@ -64,7 +64,12 @@ InstalledPlugin:
       type: object
       additionalProperties: true
       description: 完整配置对象；安装时使用服务端默认值。数值采用MySQL JSON原生精度，高精度值需作为字符串保存。
-    enabled: { type: boolean, description: 安装成功时为true。, example: true }
+    enabled: { type: boolean, description: 当前启用状态；安装成功时为true，配置更新保持原值。, example: true }
+
+PluginConfig:
+  type: object
+  additionalProperties: true
+  description: 完整配置对象本身，不使用config包装。允许未知字段、嵌套数组/null及空对象；整体替换，不合并或补默认值，无4KB业务限制。数值采用MySQL JSON原生精度，高精度值应以JSON字符串表达。
 
 ApiResponseInstalledPlugin:
   type: object

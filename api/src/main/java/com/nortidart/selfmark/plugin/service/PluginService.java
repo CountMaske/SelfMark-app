@@ -1,6 +1,7 @@
 package com.nortidart.selfmark.plugin.service;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.nortidart.selfmark.common.exception.BusinessException;
 import com.nortidart.selfmark.plugin.dto.InstalledPluginResponse;
 import com.nortidart.selfmark.plugin.dto.MarketPluginResponse;
@@ -56,6 +57,35 @@ public class PluginService {
         UserPlugin stored = userPluginMapper.selectById(instance.getId());
         if (stored == null) {
             throw new IllegalStateException("Installed plugin could not be read back");
+        }
+        return new InstalledPluginResponse(stored.getId(), plugin.getId(), plugin.getCode(),
+                plugin.getName(), stored.getConfig(), stored.getEnabled());
+    }
+
+    @Transactional
+    public InstalledPluginResponse replaceConfig(Long userId, Long id, JsonNode config) {
+        if (id == null || id <= 0) {
+            throw new BusinessException(400, "id 必须是正整数");
+        }
+        if (config == null || !config.isObject()) {
+            throw new BusinessException(400, "config 必须是 JSON 对象");
+        }
+        UserPlugin instance = userPluginMapper.selectByIdForUpdate(id);
+        if (instance == null) {
+            throw new BusinessException(404, "插件实例不存在");
+        }
+        if (!userId.equals(instance.getUserId())) {
+            throw new BusinessException(403, "无权操作该插件实例");
+        }
+        // A same-value UPDATE may report zero changed rows; the locked row still exists.
+        userPluginMapper.replaceConfig(id, userId, config);
+        UserPlugin stored = userPluginMapper.selectById(id);
+        if (stored == null) {
+            throw new IllegalStateException("Updated plugin could not be read back");
+        }
+        Plugin plugin = pluginMapper.selectById(stored.getPluginId());
+        if (plugin == null) {
+            throw new IllegalStateException("Installed plugin references a missing catalog entry");
         }
         return new InstalledPluginResponse(stored.getId(), plugin.getId(), plugin.getCode(),
                 plugin.getName(), stored.getConfig(), stored.getEnabled());
